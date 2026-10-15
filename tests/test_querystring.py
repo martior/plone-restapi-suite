@@ -458,8 +458,6 @@ VIS = {
 
 
 @pytest.mark.parametrize("persona", list(VIS))
-@pytest.mark.known_divergence(NICK, reason="search ACL omits local roles other than Reader (local Editor)",
-                              ref="A2#2", ids=["local_editor"])
 def test_qs_permission_filtered(api, sandbox, persona):
     seed(api, sandbox)
     assert ids(qs(api, sandbox, [HERE], as_=persona)) == VIS[persona]

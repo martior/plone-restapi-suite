@@ -204,8 +204,6 @@ NAV_VIS = {
 
 
 @pytest.mark.parametrize("persona", list(NAV_VIS))
-@pytest.mark.known_divergence(NICK, reason="navigation filters by the catalog ACL, which omits local Editors",
-                              ref="A2#2", ids=["local_editor"])
 def test_navigation_permission_filtered(api, sandbox, persona):
     """Private items are hidden, and so are published items below a private folder."""
     seed(api, sandbox)

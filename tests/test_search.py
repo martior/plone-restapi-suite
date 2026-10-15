@@ -360,8 +360,8 @@ def test_search_searchable_text_empty_query_bare_list(api, sandbox, term):
 @pytest.mark.parametrize("term", ['"', "?", "\\", "%", "'", "AND", "OR", "NOT", "-", "@", "zebra NOT alpha", "\u200b"])
 @pytest.mark.plone_bug("ZCTextIndex query parse errors ('Query contains only common words', 'Token <ATOM> "
                        "required') are not mapped to 400: @search answers 500 with a traceback")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick answers 200 with no results for these",
-                              ids=['"', "[?]", "%", "AND", "OR", "NOT", "-", "@", "\\u200b"])
+@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick parses every term safely and answers 200 "
+                              "(plone.restapi documents no parse errors)")
 def test_search_searchable_text_parse_error_is_500(api, sandbox, term):
     seed(api, sandbox)
     r = s(api, sandbox, SearchableText=term)
