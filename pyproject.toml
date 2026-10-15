@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "restapi-suite"
+version = "0.1.0"
+description = "Backend-agnostic black-box test suite for the plone.restapi HTTP API (Plone 6.2 reference, Nick, ...)"
+requires-python = ">=3.11"
+dependencies = ["pytest>=8", "pytest-xdist>=3", "httpx>=0.27"]
+
+[project.scripts]
+restapi-suite-report = "restapi_suite.report:main"
+
+[tool.setuptools]
+packages = ["restapi_suite"]
+
+[tool.setuptools.package-data]
+restapi_suite = ["*.json", "*.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p restapi_suite.plugin -ra"
+markers = [
+  "known_divergence(target, reason, ref=None): expected failure on TARGET (target name or kind); xfail(strict=False)",
+  "plone_bug(reason): the encoded Plone 6.2 behaviour looks like a bug; informational, shown in the report",
+  "requires(*features): skip unless the target declares all FEATURES in targets.toml",
+  "area(name): service area for the report (default: test module name)",
+]

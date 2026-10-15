@@ -1,0 +1,10 @@
+# Known, deliberate or already-understood divergences, applied as
+# xfail(strict=False) on matching targets. Prefer the
+# @pytest.mark.known_divergence marker next to the test; use this file for
+# divergences that are a property of a target as a whole.
+#
+# [[divergence]]
+# test = "tests/test_types.py::test_types_*"    # nodeid glob
+# target = "nick"                                # target name or kind glob
+# reason = "..."
+# ref = "A2#3"                                   # optional cross-reference

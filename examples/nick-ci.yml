@@ -1,0 +1,124 @@
+# Example GitHub Actions workflow for a Nick fork (e.g. martior/nick):
+# start Postgres + Nick, optionally a Plone 6.2 reference, run restapi-suite
+# against Nick and upload the markdown report. Copy to .github/workflows/.
+#
+# Not pushed anywhere; adjust SUITE_REPO / SUITE_REF to where restapi-suite lives.
+
+name: restapi-suite
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      differential:
+        description: "Also diff every request against a Plone 6.2 reference"
+        type: boolean
+        default: false
+
+env:
+  SUITE_REPO: martior/restapi-suite   # placeholder
+  SUITE_REF: main
+
+jobs:
+  restapi-suite:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: nick
+          POSTGRES_PASSWORD: nick
+          POSTGRES_DB: nick
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+      plone:
+        # Reference backend. Cheap to start even when unused; only queried
+        # when differential mode is on. The classic distribution without
+        # content does not install plone.restapi, hence PROFILES.
+        image: plone/plone-backend:6.2
+        env:
+          SITE: plone
+          DISTRIBUTION: classic
+          PROFILES: plone.restapi:default
+          SETUP_CONTENT: "false"
+          TIMEZONE: UTC
+        ports: ["8081:8080"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.x
+      - run: npm i -g corepack@latest && corepack enable
+
+      - name: Bootstrap Nick (install, config, migrate, seed)
+        run: pnpm bootstrap
+
+      - name: Start Nick
+        env:
+          # The suite logs in once per persona and runs in parallel; the
+          # default limits (100 API / 5 auth requests per 15 min) are far too low.
+          API_RATE_LIMIT: 1000000
+          AUTH_RATE_LIMIT: 1000000
+        run: |
+          nohup ./node_modules/.bin/tsx src/server.ts > nick.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null -H 'Accept: application/json' http://localhost:8080/ && exit 0
+            sleep 2
+          done
+          cat nick.log; exit 1
+
+      - name: Wait for Plone reference
+        if: ${{ inputs.differential }}
+        run: |
+          for i in $(seq 1 90); do
+            curl -sf -o /dev/null -H 'Accept: application/json' http://localhost:8081/plone && exit 0
+            sleep 2
+          done
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SUITE_REPO }}
+          ref: ${{ env.SUITE_REF }}
+          path: restapi-suite
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install restapi-suite
+        run: pip install -e restapi-suite
+
+      - name: Run restapi-suite against Nick
+        working-directory: restapi-suite
+        env:
+          RESTAPI_TARGET: nick
+          BASE_URL: http://localhost:8080
+          ADMIN_USER: admin
+          ADMIN_PASSWORD: admin
+          REFERENCE_URL: ${{ inputs.differential && 'http://localhost:8081/plone' || '' }}
+          RESULTS_DIR: results
+        # Known divergences are xfail; a fixed bug shows up as XPASS. Set
+        # STRICT_DIVERGENCES=1 to make them fail instead.
+        run: pytest -n 4 --junitxml=results/junit.xml || echo "SUITE_FAILED=1" >> "$GITHUB_ENV"
+
+      - name: Markdown report
+        if: always()
+        working-directory: restapi-suite
+        run: |
+          restapi-suite-report results --out results/report.md
+          head -40 results/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: restapi-suite-report
+          path: |
+            restapi-suite/results/
+            nick.log
+
+      - name: Fail on suite failures
+        if: env.SUITE_FAILED == '1'
+        run: exit 1

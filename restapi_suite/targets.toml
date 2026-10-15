@@ -1,0 +1,74 @@
+# Target definitions. Select with --target NAME (or env RESTAPI_TARGET).
+# --base-url/--admin-user/--admin-password (env BASE_URL, ADMIN_USER,
+# ADMIN_PASSWORD) override the selected target; --target-kind picks which
+# definition supplies type/role mappings when only a URL is given.
+#
+# types:    logical type -> portal_type on this backend. Tests use logical
+#           names via "{type:document}" placeholders.
+# roles:    logical global role -> list of real role ids for persona users.
+# features: capability flags used by @pytest.mark.requires(...).
+# sandbox_type: logical type used for the per-worker and per-test sandbox
+#           containers (default "folder").
+
+[plone]
+kind = "plone"
+base_url = "http://127.0.0.1:18640/plone"
+admin_user = "admin"
+admin_password = "admin"
+features = ["etag", "uid", "ordering", "copy_move", "member_role", "per_type_add"]
+[plone.types]
+site = "Plone Site"
+document = "Document"
+folder = "Folder"
+news = "News Item"
+event = "Event"
+file = "File"
+image = "Image"
+link = "Link"
+[plone.roles]
+member = ["Member"]
+site_admin = ["Site Administrator"]
+manager = ["Manager"]
+
+[plone-volto]
+kind = "plone"
+# plone.volto restricts the site root to Document (folderish there).
+sandbox_type = "document"
+base_url = "http://127.0.0.1:18643/plone"
+admin_user = "admin"
+admin_password = "admin"
+features = ["etag", "uid", "ordering", "copy_move", "member_role", "per_type_add", "blocks"]
+[plone-volto.types]
+site = "Plone Site"
+document = "Document"
+folder = "Folder"
+news = "News Item"
+event = "Event"
+file = "File"
+image = "Image"
+link = "Link"
+[plone-volto.roles]
+member = ["Member"]
+site_admin = ["Site Administrator"]
+manager = ["Manager"]
+
+[nick]
+kind = "nick"
+base_url = "http://127.0.0.1:18641"
+admin_user = "admin"
+admin_password = "admin"
+features = ["ordering", "copy_move", "blocks"]
+[nick.types]
+# Nick core has no Document/News Item/Link; Page is its document type.
+site = "Site"
+document = "Page"
+folder = "Folder"
+event = "Event"
+file = "File"
+image = "Image"
+video = "Video"
+[nick.roles]
+# Nick has no Member, Manager or Site Administrator roles.
+member = []
+site_admin = ["Administrator"]
+manager = ["Administrator"]

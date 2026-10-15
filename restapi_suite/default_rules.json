@@ -1,0 +1,58 @@
+{
+  "_doc": "Normalisation rules applied to BOTH expected (fixture) and actual JSON before diffing. Order: base-URL rewrite (actual only) -> ignore_paths -> patterns (in list order) -> unordered_lists -> diff. Path globs match paths like 'items[*].@id' ('*' matches anything incl. dots, brackets are literal, so items[*].x = any index). 'fixtures' is a glob on the fixture name. Copy this file and pass --rules to change behaviour.",
+  "canonical_base_url": "http://localhost:55001/plone",
+  "compare_headers": ["content-type", "location"],
+  "set_valued_headers": ["allow"],
+  "patterns": [
+    {
+      "name": "static-test-uuid",
+      "_doc": "register_static_uuid_utility(prefix='SomeUUID') in test_documentation.py:211 yields SomeUUID000...N",
+      "regex": "SomeUUID\\d{24}",
+      "replace": "<UUID>"
+    },
+    {
+      "name": "uuid-hex32",
+      "_doc": "Plone UIDs (uuid4().hex), tus upload ids, scale hashes",
+      "regex": "(?<![0-9A-Za-z])[0-9a-f]{32}(?![0-9A-Za-z])",
+      "replace": "<UUID>"
+    },
+    {
+      "name": "uuid-dashed",
+      "regex": "(?<![0-9A-Za-z])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9A-Za-z])",
+      "replace": "<UUID>"
+    },
+    {
+      "name": "image-scale-name",
+      "_doc": "patch_scale_uuid('uuid1') in the tests fixes scale names; real servers emit <field>-<w>-<hash>.<ext>",
+      "regex": "@@images/[A-Za-z0-9_<>\\-]+\\.(png|jpe?g|gif|svg|webp)",
+      "replace": "@@images/<SCALE>.\\1"
+    },
+    {
+      "name": "iso-datetime",
+      "_doc": "StaticTime (tests/statictime.py) pins created/modified to 1995-07-31; live servers do not. Not applied to event start/end or recurrence, which are content.",
+      "regex": "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:?\\d{2})?",
+      "replace": "<DATETIME>",
+      "exclude_paths": ["start", "end", "*.start", "*.end", "recurrence", "*.recurrence"]
+    },
+    {
+      "name": "jwt",
+      "regex": "eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+",
+      "replace": "<JWT>"
+    },
+    {
+      "name": "lock-token",
+      "regex": "\\d\\.\\d+-\\d\\.\\d+-[0-9A-F]+:\\d+\\.\\d+",
+      "replace": "<LOCKTOKEN>"
+    }
+  ],
+  "ignore_paths": [
+    {"fixtures": "*lock*", "path": "time", "_doc": "lock creation epoch seconds"},
+    {"fixtures": "*lock*", "path": "lock.time"},
+    {"fixtures": "*", "path": "*.lock.time"}
+  ],
+  "unordered_lists": [
+    {"fixtures": "*", "path": "*roles", "_doc": "role lists are sets"},
+    {"fixtures": "*", "path": "*.allow"},
+    {"fixtures": "*", "path": "*behaviors", "_doc": "FTI behaviour lists are effectively sets"}
+  ]
+}
