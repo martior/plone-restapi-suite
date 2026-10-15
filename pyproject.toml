@@ -26,4 +26,5 @@ markers = [
   "plone_bug(reason): the encoded Plone 6.2 behaviour looks like a bug; informational, shown in the report",
   "requires(*features): skip unless the target declares all FEATURES in targets.toml",
   "area(name): service area for the report (default: test module name)",
+  "migration: Plone to Nick migration round trip; needs MIGRATION_SOURCE_URL and MIGRATION_TARGET_URL (tests/test_migration_roundtrip.py)",
 ]

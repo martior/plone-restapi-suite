@@ -142,6 +142,36 @@ resolves them itself, so one request works on Plone and Nick:
 - `@pytest.mark.requires("blocks")`: skip unless the target declares the feature in targets.toml.
 - `@pytest.mark.area("types")`: report grouping.
 
+## Migration round trip (opt-in)
+
+`tests/test_migration_roundtrip.py` (marker `migration`) checks that Nick's
+`pnpm export` migrates a Plone 6.2 site without loss. It needs a freshly
+seeded Plone and a fresh Nick that imported the exported profile, so it is
+skipped unless `MIGRATION_SOURCE_URL` and `MIGRATION_TARGET_URL` are set.
+
+```
+python tests/test_migration_roundtrip.py seed http://127.0.0.1:18700/plone   # empty volto site, admin/admin
+(cd nick && pnpm export http://127.0.0.1:18700/plone admin admin migrated)
+# fresh Nick with profiles core + migrated (config.ts), then:
+MIGRATION_SOURCE_URL=http://127.0.0.1:18700/plone MIGRATION_TARGET_URL=http://127.0.0.1:18701 \
+MIGRATION_TARGET_USERS=nick/src/profiles/migrated/users.json \
+  pytest -m migration tests/test_migration_roundtrip.py --target plone
+```
+
+The seed covers folders, pages, news, events (intranet workflow), files and
+images, private/pending/published items with workflow history and comments
+on transitions, versioned edits, a rename and manual aliases, local roles
+for users and groups, a folder that blocks inheritance, relations, teaser,
+image and listing blocks, comments with a reply, en/de translations, 130
+archive pages (more than one export batch), users and groups. The test
+compares item by item: tree, UUIDs, states, field values, folder order,
+relations, workflow history, versions, local roles and the inherit flag,
+blobs (byte equality), translations, redirects, comments, users and groups,
+workflow transitions, `@search` as admin, index queries, and
+permission-filtered `@search` for anonymous and five users. Migrated users
+get random passwords, so `MIGRATION_TARGET_USERS` points at the exported
+`users.json` to log in on Nick (the Plone password must not work there).
+
 ## Differential mode
 
 With `--reference`, every `api` request goes to both backends, so their state
