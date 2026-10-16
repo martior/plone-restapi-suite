@@ -82,15 +82,20 @@ def test_lock_relock_by_owner_keeps_token(api, locked_doc):
     assert r.status == 200 and r.json["token"] == token, r
 
 
-@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
-                              reason="POST @lock on an item locked by another user answers 200 with the other "
-                                     "user's lock (and token) instead of an error")
-def test_lock_by_other_user_is_refused(api, locked_doc):
-    """locking.md: "If a second user tries to edit the object at the same time, she will see a
-    message that this object is locked." Taking the lock must fail and leave a's lock alone."""
+@pytest.mark.compat("POST @lock on an item locked by another user answers 200 with the holder's lock instead "
+                    "of 409/423; Volto's edit view POSTs @lock on entry and breaks on a failure: volto 19.5.0 "
+                    "packages/volto/src/components/manage/Edit/Edit.jsx:526-529 (lockContent whenever content.lock "
+                    "is defined), reducers/content/content.js:293-318 (LOCK_CONTENT_FAIL sets content.data to null), "
+                    "Edit.jsx:310 (formData={content}). The edit itself is refused by the lock "
+                    "(test_lock_token_from_get_does_not_let_other_editor_edit)")
+@pytest.mark.known_divergence(NICK, kind="bug", reason="Nick refuses with 401 'Already locked'; Volto's edit view "
+                              "then loses the content (see the compat note)")
+def test_lock_by_other_user_returns_existing_lock(api, locked_doc):
+    """The second user gets the holder's lock back and a's lock is left alone, so the client
+    can show who holds it (locking.md: "she will see a message that this object is locked")."""
     path, a, b, token = locked_doc
     r = api.post(f"{path}/@lock", as_=b)
-    assert r.status in LOCKED, r
+    assert r.status == 200 and r.json["locked"] is True and r.json["creator"] == a.id, r
     j = _lock(api, path)
     assert j["creator"] == a.id and j["token"] == token, j
 
