@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<dc-workflow workflow_id="roundtrip_flag_workflow" title="Round trip flag workflow" description="A second workflow of the chain." state_variable="flag_state" initial_state="unflagged" manager_bypass="False">
+ <state state_id="unflagged" title="Unflagged">
+  <exit-transition transition_id="flag"/>
+ </state>
+ <state state_id="flagged" title="Flagged">
+  <exit-transition transition_id="unflag"/>
+ </state>
+ <transition transition_id="flag" title="Flag" new_state="flagged" trigger="USER" before_script="" after_script="">
+  <action url="%(content_url)s/content_status_modify?workflow_action=flag" category="workflow">Flag</action>
+  <guard><guard-role>Reviewer</guard-role><guard-role>Manager</guard-role></guard>
+ </transition>
+ <transition transition_id="unflag" title="Unflag" new_state="unflagged" trigger="USER" before_script="" after_script="">
+  <action url="%(content_url)s/content_status_modify?workflow_action=unflag" category="workflow">Unflag</action>
+  <guard><guard-role>Reviewer</guard-role><guard-role>Manager</guard-role></guard>
+ </transition>
+</dc-workflow>

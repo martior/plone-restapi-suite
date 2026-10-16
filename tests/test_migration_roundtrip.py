@@ -16,6 +16,13 @@ Workflow:
     # fresh Nick with profiles core + migrated, then:
     pytest -m migration tests/test_migration_roundtrip.py
 
+The seed also adds a Dexterity type ``guarded_item`` with a custom workflow
+chain (tests/fixtures/roundtrip_workflows, imported as a GenericSetup
+tarball): guards with roles, a group and expressions, a variable, a worklist
+and a second workflow. ``test_custom_workflow_guards`` checks that every
+persona is offered the same transitions on its items; it skips on sources
+seeded before it was added.
+
 The test compares, item by item: the content tree (paths, types, UUIDs,
 titles), review states, local roles and the inherit flag, workflow history,
 versions, blobs (byte equality of every file and image), relations,
@@ -28,6 +35,7 @@ test sets a known password on both sides for the users it logs in as.
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 import os
 import struct
 import sys
@@ -278,6 +286,10 @@ def seed_plone(base: str, admin: str = "admin", password: str = "admin") -> None
     create("en/intranet", "Image", "chart.png", "Chart",
            image=b64(png(20, 10, (0, 0, 0)), "chart.png", "image/png"))
 
+    # /en/guarded: a type with a custom workflow chain (guards with roles,
+    # groups and expressions, a variable, a worklist, a second workflow)
+    seed_guarded_workflow(p, zmi, create, tr, share)
+
     # /en/archive: enough items to need several export batches
     create("en", "Document", "archive", "Archive", **blocks(slate("Old pages.")))
     tr("en/archive", "publish")
@@ -286,6 +298,43 @@ def seed_plone(base: str, admin: str = "admin", password: str = "admin") -> None
                description=f"Archive entry number {i}", subjects=["archive", f"year-{2000 + i % 20}"])
         if i % 3:
             tr(f"en/archive/page-{i:03d}", "publish")
+
+
+GUARDED_TYPE = "guarded_item"
+GUARDED_WORKFLOWS = Path(__file__).parent / "fixtures" / "roundtrip_workflows"
+
+
+def seed_guarded_workflow(p, zmi, create, tr, share) -> None:
+    """Add the type Guarded Item with the chain roundtrip_guarded_workflow +
+    roundtrip_flag_workflow (tests/fixtures/roundtrip_workflows, imported as
+    a GenericSetup tarball) and items in its states."""
+    import io
+    import tarfile
+
+    p.post("@controlpanels/dexterity-types", {"title": "Guarded Item", "description": "Custom workflow"})
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w:gz") as tar:
+        for path in sorted(GUARDED_WORKFLOWS.rglob("*.xml")):
+            tar.add(path, arcname=str(path.relative_to(GUARDED_WORKFLOWS)))
+    auth = p.http.get(p.url("@@authenticator/token"), headers=zmi).text.strip()
+    r = p.http.post(p.url("portal_setup/manage_importTarball"), headers=zmi,
+                    data={"_authenticator": auth, "submitted": "1"},
+                    files={"tarball": ("workflows.tar.gz", archive.getvalue(), "application/x-gzip")})
+    assert r.status_code == 200, r.text[:300]
+    assert p.get(f"@types/{GUARDED_TYPE}")  # the type exists
+
+    create("en", "Document", "guarded", "Guarded", **blocks(slate("Custom workflow.")))
+    tr("en/guarded", "publish")
+    share("en/guarded", [{"id": "editor1", "type": "user", "roles": {"Editor": True}},
+                         {"id": "contributor1", "type": "user", "roles": {"Contributor": True}}])
+    create("en/guarded", GUARDED_TYPE, "draft-item", "Draft item")
+    create("en/guarded", GUARDED_TYPE, "locked-item", "Locked plan")
+    create("en/guarded", GUARDED_TYPE, "own-item", "Own item", as_="contributor1")
+    create("en/guarded", GUARDED_TYPE, "review-item", "Review item")
+    tr("en/guarded/review-item", "send", comment="Please check")
+    create("en/guarded", GUARDED_TYPE, "done-item", "Done item")
+    tr("en/guarded/done-item", "send")
+    tr("en/guarded/done-item", "approve", as_="reviewer1", comment="Fine")
 
 
 # -- verification -----------------------------------------------------------
@@ -500,10 +549,12 @@ def localized(path: str) -> bool:
 
 def plone_workflow_history(side, path):
     """Plone: the raw history of @workflow (@history translates action ids)."""
-    titles = {e["time"] + e["review_state"]: e.get("transition_title") for e in side.docs[path]["history"]
-              if e["type"] == "workflow"}
+    # Keyed by the action too: a creation and a transition to the same state
+    # can happen in the same second
+    titles = {(e["time"], e["review_state"], e.get("action")): e.get("transition_title")
+              for e in side.docs[path]["history"] if e["type"] == "workflow"}
     return [(e["action"], e["actor"], e["review_state"], e.get("comments") or "", norm_time(e["time"]),
-             None if localized(path) else titles.get(e["time"] + e["review_state"]))
+             None if localized(path) else titles.get((e["time"], e["review_state"], e["action"] or "Create")))
             for e in side.docs[path]["workflow"].get("history", [])]
 
 
@@ -667,7 +718,8 @@ def test_workflow_transitions(sides):
     p, n = sides
     mismatches = []
     for path in p.docs:
-        if p.docs[path]["json"]["@type"] in NO_WORKFLOW:
+        # The custom workflow is compared per persona in test_custom_workflow_guards
+        if p.docs[path]["json"]["@type"] in (*NO_WORKFLOW, GUARDED_TYPE):
             continue
         def transitions(side):
             data = side.site.get(f"{path}/@workflow")
@@ -724,6 +776,44 @@ def test_permission_filtered_search(plone, nick, passwords, persona):
     a = sorted(rel(plone, i["@id"]) for i in search_all(plone, persona))
     b = sorted(rel(nick, i["@id"]) for i in search_all(nick, persona))
     assert a == b, {"only in plone": sorted(set(a) - set(b)), "only in nick": sorted(set(b) - set(a))}
+
+
+@needs_sites
+@pytest.mark.parametrize("persona", ["admin", *SEARCH_PERSONAS], ids=lambda u: u or "anonymous")
+def test_custom_workflow_guards(plone, nick, passwords, persona):
+    """A custom workflow chain with guards (roles, a group, expressions), a
+    variable and a second workflow survives: every persona is offered the
+    same transitions on every item, and the history has the variable."""
+    items = [i["@id"] for i in search_all(plone, portal_type=GUARDED_TYPE)]
+    if not items:
+        pytest.skip(f"the source has no {GUARDED_TYPE} (seeded before the custom workflow was added)")
+    if persona not in (None, "admin"):
+        nick.login(persona, passwords[persona])
+
+    def offered(site, path):
+        r = site.req("GET", f"{path}/@workflow", as_=persona, ok=None)
+        if r.status_code != 200:
+            return r.status_code, None, []
+        data = r.json()
+        ids = sorted(t["@id"].rsplit("/", 1)[-1] for t in data["transitions"])
+        if site is plone and persona == "admin" and path.endswith("/own-item"):
+            # admin owns the folders above; Plone inherits the Owner local
+            # role, Nick gives Owner only to the owner of the item (N8)
+            ids = [i for i in ids if i != "send"]
+        return 200, data["state"]["id"], ids
+
+    mismatches = []
+    for url in items:
+        path = rel(plone, url)
+        mismatches += compare([(path, offered(plone, path), offered(nick, path))])
+    assert not mismatches, mismatches
+
+    if persona == "admin":
+        def history(site, path):
+            return [(h.get("action"), h.get("actor"), h.get("review_state"), h.get("approved_by", ""))
+                    for h in site.get(f"{path}/@workflow")["history"]]
+        assert history(plone, "en/guarded/done-item") == history(nick, "en/guarded/done-item")
+        assert history(nick, "en/guarded/done-item")[-1] == ("approve", "reviewer1", "done", "reviewer1")
 
 
 if __name__ == "__main__":

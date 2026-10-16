@@ -1,0 +1,135 @@
+<?xml version="1.0"?>
+<dc-workflow workflow_id="roundtrip_guarded_workflow" title="Round trip guarded workflow" description="Guards with roles, groups and expressions." state_variable="review_state" initial_state="draft" manager_bypass="False">
+ <permission>Access contents information</permission>
+ <permission>View</permission>
+ <permission>Modify portal content</permission>
+ <state state_id="draft" title="Draft">
+  <exit-transition transition_id="send"/>
+  <exit-transition transition_id="escalate"/>
+  <permission-map name="Access contents information" acquired="False">
+   <permission-role>Manager</permission-role>
+   <permission-role>Site Administrator</permission-role>
+   <permission-role>Owner</permission-role>
+   <permission-role>Editor</permission-role>
+   <permission-role>Reader</permission-role>
+   <permission-role>Contributor</permission-role>
+   <permission-role>Reviewer</permission-role>
+   <permission-role>Member</permission-role>
+  </permission-map>
+  <permission-map name="View" acquired="False">
+   <permission-role>Manager</permission-role>
+   <permission-role>Site Administrator</permission-role>
+   <permission-role>Owner</permission-role>
+   <permission-role>Editor</permission-role>
+   <permission-role>Reader</permission-role>
+   <permission-role>Contributor</permission-role>
+   <permission-role>Reviewer</permission-role>
+   <permission-role>Member</permission-role>
+  </permission-map>
+  <permission-map name="Modify portal content" acquired="False">
+   <permission-role>Manager</permission-role>
+   <permission-role>Site Administrator</permission-role>
+   <permission-role>Owner</permission-role>
+   <permission-role>Editor</permission-role>
+  </permission-map>
+ </state>
+ <state state_id="review" title="In review">
+  <exit-transition transition_id="approve"/>
+  <exit-transition transition_id="reopen"/>
+  <permission-map name="Access contents information" acquired="False">
+   <permission-role>Manager</permission-role>
+   <permission-role>Site Administrator</permission-role>
+   <permission-role>Owner</permission-role>
+   <permission-role>Editor</permission-role>
+   <permission-role>Reader</permission-role>
+   <permission-role>Contributor</permission-role>
+   <permission-role>Reviewer</permission-role>
+   <permission-role>Member</permission-role>
+  </permission-map>
+  <permission-map name="View" acquired="False">
+   <permission-role>Manager</permission-role>
+   <permission-role>Site Administrator</permission-role>
+   <permission-role>Owner</permission-role>
+   <permission-role>Editor</permission-role>
+   <permission-role>Reader</permission-role>
+   <permission-role>Contributor</permission-role>
+   <permission-role>Reviewer</permission-role>
+   <permission-role>Member</permission-role>
+  </permission-map>
+  <permission-map name="Modify portal content" acquired="False">
+   <permission-role>Manager</permission-role>
+   <permission-role>Site Administrator</permission-role>
+   <permission-role>Reviewer</permission-role>
+  </permission-map>
+ </state>
+ <state state_id="done" title="Done">
+  <exit-transition transition_id="reopen"/>
+  <permission-map name="Access contents information" acquired="False">
+   <permission-role>Anonymous</permission-role>
+  </permission-map>
+  <permission-map name="View" acquired="False">
+   <permission-role>Anonymous</permission-role>
+  </permission-map>
+  <permission-map name="Modify portal content" acquired="False">
+   <permission-role>Manager</permission-role>
+   <permission-role>Site Administrator</permission-role>
+  </permission-map>
+ </state>
+ <transition transition_id="send" title="Send for review" new_state="review" trigger="USER" before_script="" after_script="">
+  <action url="%(content_url)s/content_status_modify?workflow_action=send" category="workflow">Send</action>
+  <guard>
+   <guard-role>Owner</guard-role>
+   <guard-role>Editor</guard-role>
+  </guard>
+ </transition>
+ <transition transition_id="approve" title="Approve" new_state="done" trigger="USER" before_script="" after_script="">
+  <action url="%(content_url)s/content_status_modify?workflow_action=approve" category="workflow">Approve</action>
+  <guard>
+   <guard-permission>Review portal content</guard-permission>
+   <guard-group>reviewers-team</guard-group>
+  </guard>
+  <assignment name="approved_by">user/getId</assignment>
+ </transition>
+ <transition transition_id="reopen" title="Reopen" new_state="draft" trigger="USER" before_script="" after_script="">
+  <action url="%(content_url)s/content_status_modify?workflow_action=reopen" category="workflow">Reopen</action>
+  <guard>
+   <guard-expression>python:user.has_role('Manager', here) or here.portal_membership.checkPermission('Modify portal content', here)</guard-expression>
+  </guard>
+ </transition>
+ <transition transition_id="escalate" title="Escalate" new_state="review" trigger="USER" before_script="" after_script="">
+  <action url="%(content_url)s/content_status_modify?workflow_action=escalate" category="workflow">Escalate</action>
+  <guard>
+   <guard-expression>python:here.portal_membership.getAuthenticatedMember().getId() == 'editor1' and not here.Title().startswith('Locked')</guard-expression>
+  </guard>
+ </transition>
+ <worklist worklist_id="review_queue" title="">
+  <description>Items in review</description>
+  <action url="%(portal_url)s/search?review_state=review" category="global">In review (%(count)d)</action>
+  <guard><guard-permission>Review portal content</guard-permission></guard>
+  <match name="review_state" values="review"/>
+ </worklist>
+ <variable variable_id="action" for_catalog="False" for_status="True" update_always="True">
+  <default><expression>transition/getId|nothing</expression></default>
+  <guard></guard>
+ </variable>
+ <variable variable_id="actor" for_catalog="False" for_status="True" update_always="True">
+  <default><expression>user/getId</expression></default>
+  <guard></guard>
+ </variable>
+ <variable variable_id="comments" for_catalog="False" for_status="True" update_always="True">
+  <default><expression>python:state_change.kwargs.get('comment', '')</expression></default>
+  <guard></guard>
+ </variable>
+ <variable variable_id="review_history" for_catalog="False" for_status="False" update_always="False">
+  <default><expression>state_change/getHistory</expression></default>
+  <guard><guard-permission>Request review</guard-permission><guard-permission>Review portal content</guard-permission></guard>
+ </variable>
+ <variable variable_id="time" for_catalog="False" for_status="True" update_always="True">
+  <default><expression>state_change/getDateTime</expression></default>
+  <guard></guard>
+ </variable>
+ <variable variable_id="approved_by" for_catalog="False" for_status="True" update_always="False">
+  <default><value type="string"></value></default>
+  <guard></guard>
+ </variable>
+</dc-workflow>

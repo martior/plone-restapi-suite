@@ -241,6 +241,13 @@ permission-filtered `@search` for anonymous and five users. Migrated users
 get random passwords, so `MIGRATION_TARGET_USERS` points at the exported
 `users.json` to log in on Nick (the Plone password must not work there).
 
+The seed adds a type `guarded_item` with a custom workflow chain
+(`tests/fixtures/roundtrip_workflows`: guards with roles, a group and
+expressions, a variable, a worklist, a second workflow), imported with
+`portal_setup/manage_importTarball`; `test_custom_workflow_guards` compares
+the transitions every persona is offered on those items. It skips on sources
+seeded before (like `plonex-s2-plone`).
+
 ## Differential mode
 
 With `--reference`, every `api` request goes to both backends, so their state
