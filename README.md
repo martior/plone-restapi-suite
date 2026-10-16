@@ -1,10 +1,14 @@
 # restapi-suite
 
 Backend-agnostic, black-box tests for the [plone.restapi](https://github.com/plone/plone.restapi)
-HTTP API. **Plone 6.2 is the reference**: every expectation is what Plone 6.2
-does (tests that encode questionable Plone behaviour carry
-`@pytest.mark.plone_bug`). The same tests run against Nick and, later, other
-backends. Everything goes over HTTP, including seeding. No in-process Python is used.
+HTTP API. **Tests assert correct behaviour**: what Plone 6.2 does, unless that
+is a bug. Then the test asserts what plone.restapi documents (or, where the
+docs are silent, HTTP semantics: 400 for invalid input, 404 for missing
+resources, 401/403 for refusals) and marks Plone with
+`known_divergence("plone", kind="plone-bug")`. Plone behaviour that is wrong
+but that clients (Volto) depend on stays asserted with `@pytest.mark.compat`.
+The same tests run against Nick and, later, other backends. Everything goes
+over HTTP, including seeding. No in-process Python is used.
 
 ```
 pip install -e .                    # or: python3 -m venv .venv && .venv/bin/pip install -e .
@@ -121,9 +125,20 @@ resolves them itself, so one request works on Plone and Nick:
 `{"source": f"{{base}}/{sandbox}/a"}`. Use `api.type("document")` in assertions.
 
 ### Conventions
-- **Plone decides.** Write the test, run it against Plone, and encode what
-  Plone does. If that looks wrong, add `@pytest.mark.plone_bug("why")` and
-  say so in the docstring.
+- **Plone decides, unless it is a bug.** Write the test, run it against Plone,
+  and encode what Plone does. If that looks wrong, decide which of these applies:
+  - *Plone bug* (bad input answered with 500, a permission or locking hole,
+    behaviour that contradicts the docs): assert the correct behaviour (docs
+    first, then HTTP semantics), cite the source in the docstring, and add
+    `@pytest.mark.known_divergence("plone", reason=..., kind="plone-bug", ref=...)`.
+    Plone then shows XFAIL, and XPASS once it is fixed.
+  - *Compat* (wrong, but a client depends on it): keep asserting Plone's
+    behaviour and add `@pytest.mark.compat("why; evidence")`. The evidence is a
+    `file:line` in the client's source (for example Volto 19). Without that
+    evidence it is not compat; it is a Plone bug.
+  - *Not a bug* on reflection (a deliberate Plone policy): assert it without a
+    marker and explain it in the docstring. A backend that differs on purpose
+    gets `kind="deliberate"`.
 - **Permissions: assert the outcome, not the deny code.** Plone answers
   401 to authenticated users who lack permission, while Nick answers 403. Use
   `DENIED` / `same_outcome()`. The exact codes have their own tests
@@ -153,11 +168,19 @@ resolves them itself, so one request works on Plone and Nick:
 ### Markers
 - `@pytest.mark.known_divergence("nick", reason="...", ref="A2#2", kind="bug"|"deliberate"|"plone-bug", ids=["local_editor"])`:
   turns the test into `xfail(strict=False)` on targets whose name or kind
-  matches. A fix then shows up as XPASS. `ids` limits it to parametrized
-  ids (globs). Use `kind="deliberate"` for design differences (for example
-  Nick is headless) and `kind="plone-bug"` when the target is arguably right.
+  matches (`"plone"` matches the kind, so it covers `plone` and `plone-volto`).
+  A fix then shows up as XPASS. `ids` limits it to parametrized
+  ids (globs). Use `kind="bug"` for a known bug of the target, `kind="deliberate"`
+  for design differences (for example Nick is headless) and `kind="plone-bug"`
+  on `"plone"` for a Plone 6.2 bug the test asserts the correct behaviour for.
   Target-wide entries can also go in `restapi_suite/known_divergences.toml`.
-- `@pytest.mark.plone_bug("...")`: informational, shown in the report.
+- `@pytest.mark.compat("why; evidence")`: the test asserts Plone behaviour that
+  is arguably wrong but that a client depends on. Its own category in the report.
+- `@pytest.mark.target_only("nick", reason="...")`: the test applies only to the
+  given targets (name or kind globs) and is skipped elsewhere. Its own category
+  in the report (for example `tests/test_workflow_acquire.py`).
+- `@pytest.mark.plone_bug("...")`: legacy informational note, still shown in
+  the report; the suite no longer uses it.
 - `@pytest.mark.requires("blocks")`: skip unless the target declares the feature in targets.toml.
 - `@pytest.mark.area("types")`: report grouping.
 
@@ -208,11 +231,15 @@ Override the rules with `RESTAPI_RULES=path.json`; suppress per request with
 ## Results and report
 
 Each run writes `results/<run>.jsonl` (one line per test: outcome, message,
-area, known divergence, kind, plone_bug note, differential data) and
+area, category, known divergence, kind, compat note, differential data) and
 `<run>.meta.json`. `restapi-suite-report [dirs|files] --out report.md`
-renders the run summary, per-area pass counts, failures, known divergences and
-Plone-bug notes, a per-test outcome matrix across runs, and the differential
-divergences.
+renders the run summary, pass counts per category, per-area pass counts,
+failures, known divergences and compat notes, a per-test outcome matrix across
+runs, and the differential divergences.
+
+Categories (one per test): **correct behaviour** (the default; a Plone bug
+counts as not passing on Plone), **compat** (`@pytest.mark.compat`) and
+**target-only** (`@pytest.mark.target_only`). Skips are counted separately.
 
 ## Gotchas found while building this
 - `@login` sets an auth cookie on both backends. The client never stores
@@ -233,7 +260,7 @@ divergences.
    seeds its own state in `sandbox`.
 3. Add probes for edges: missing or extra fields, wrong types, unknown ids, persona
    matrix, inherited/blocked local roles, and concurrent sequences.
-4. Run against Plone until it is green, then against Nick. Mark deliberate or
+4. Run against Plone until it is green (or Plone bugs are marked), then against Nick. Mark deliberate or
    understood divergences with `known_divergence`. Leave Nick bugs failing,
    or mark them `kind="bug"` with a reference.
 5. Add any new helper to `Api` and document it here.
