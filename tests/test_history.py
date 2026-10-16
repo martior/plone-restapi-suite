@@ -227,7 +227,6 @@ def test_history_revert_by_local_editor(api, sandbox):
     assert api.get(path).json["title"] == "v0"
 
 
-@pytest.mark.known_divergence(NICK, reason="PATCH @history (revert) only requires View", ref="A2#5")
 def test_history_revert_denied_for_local_reader(api, sandbox):
     """Reader may view the item, but revert needs edit rights
     (CMFEditions: Revert to previous versions)."""
@@ -259,6 +258,7 @@ def test_history_revert_without_version_is_error(api, sandbox):
 
 
 @pytest.mark.plone_bug("reverting to a version that does not exist is a 500, not 404/400")
+@pytest.mark.known_divergence(NICK, reason="Nick answers 404", kind="plone-bug")
 def test_history_revert_unknown_version_is_500(api, sandbox):
     path = _doc_with_edits(api, sandbox, n=1)
     assert api.patch(f"{path}/@history", json={"version": 99}).status == 500

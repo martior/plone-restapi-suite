@@ -189,8 +189,6 @@ def test_local_reviewer_on_pending(api, sandbox):
     assert api.patch(f"{sandbox}/d", as_=u, json={"title": "reviewed"}).status == 204
 
 
-@pytest.mark.known_divergence("nick", reason="Nick guards DELETE with Modify, so a Reviewer who may edit a pending "
-                              "item may also delete it (routes/content/content.ts:913-915)")
 def test_local_reviewer_cannot_delete_pending(api, sandbox):
     """Plone: Delete objects is not granted to Reviewer, although pending grants it Modify."""
     u = api.create_user()
@@ -230,7 +228,6 @@ def test_private_folder_listing_hides_private_children_from_member(api, sandbox)
     assert item_ids(r.json) == ["pub"], r.json
 
 
-@pytest.mark.known_divergence("nick", reason="listing filters by the catalog ACL, which omits local Editors", ref="A2#2")
 def test_folder_listing_shows_private_children_to_local_editor(api, sandbox):
     api.doc(sandbox, "priv")
     r = api.get(sandbox, as_="local_editor")
@@ -302,7 +299,6 @@ def _search_ids(api, path, persona):
     ("anonymous", ["pub"]), ("member", ["pub"]), ("local_editor", ["priv", "pub"]),
     ("site_admin", ["priv", "pub"]), ("manager", ["priv", "pub"]),
 ], ids=list(PERSONAS))
-@pytest.mark.known_divergence("nick", reason="search ACL omits local Editors", ref="A2#2", ids=["local_editor"])
 def test_search_respects_view(api, sandbox, persona, expected):
     api.publish(sandbox)
     api.doc(sandbox, "priv")

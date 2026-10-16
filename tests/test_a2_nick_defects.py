@@ -27,7 +27,6 @@ def search_ids(api, path, persona, **params):
 
 # ---------------------------------------------------------------- A2#1
 
-@pytest.mark.known_divergence(NICK, reason="@sharing POST does not reindex the catalog ACL", ref="A2#1")
 def test_a2_1_search_sees_role_granted_after_creation(api, sandbox):
     u = api.create_user()
     api.publish(sandbox)
@@ -38,7 +37,6 @@ def test_a2_1_search_sees_role_granted_after_creation(api, sandbox):
     assert search_ids(api, sandbox, u) == ["d"]          # ... and so must search
 
 
-@pytest.mark.known_divergence(NICK, reason="@sharing POST does not reindex the catalog ACL (fails open)", ref="A2#1")
 def test_a2_1_search_hides_after_role_revoked(api, sandbox):
     u = api.create_user()
     api.publish(sandbox)
@@ -51,7 +49,6 @@ def test_a2_1_search_hides_after_role_revoked(api, sandbox):
     assert search_ids(api, sandbox, u) == [], "revoked user still finds the private document"
 
 
-@pytest.mark.known_divergence(NICK, reason="blocking inheritance does not reindex descendants", ref="A2#1")
 def test_a2_1_search_hides_after_inheritance_blocked(api, sandbox):
     api.publish(sandbox)
     api.folder(sandbox, "f")
@@ -67,8 +64,6 @@ def test_a2_1_search_hides_after_inheritance_blocked(api, sandbox):
 
 # ---------------------------------------------------------------- A2#2
 
-@pytest.mark.known_divergence(NICK, reason="ACL only lists local roles that hold View globally (Reader), "
-                              "so a local Editor cannot find a private doc it can open", ref="A2#2")
 def test_a2_2_local_editor_finds_private_doc(api, sandbox):
     api.publish(sandbox)
     api.doc(sandbox, "d")
@@ -76,7 +71,6 @@ def test_a2_2_local_editor_finds_private_doc(api, sandbox):
     assert search_ids(api, sandbox, "local_editor") == ["d"]
 
 
-@pytest.mark.known_divergence(NICK, reason="same as A2#2 for a local Contributor", ref="A2#2")
 def test_a2_2_local_contributor_finds_private_doc(api, sandbox):
     u = api.create_user()
     api.publish(sandbox)
@@ -86,7 +80,6 @@ def test_a2_2_local_contributor_finds_private_doc(api, sandbox):
     assert search_ids(api, sandbox, u) == ["d"]
 
 
-@pytest.mark.known_divergence(NICK, reason="navigation/listing uses the same ACL column", ref="A2#2")
 def test_a2_2_local_editor_sees_private_doc_in_listing(api, sandbox):
     api.publish(sandbox)
     api.folder(sandbox, "f")
@@ -109,7 +102,6 @@ def role_named_group(api):
     return gid
 
 
-@pytest.mark.known_divergence(NICK, reason="principal and role tokens share one unprefixed ACL namespace", ref="A2#3")
 def test_a2_3_group_named_like_role_does_not_leak_private_docs(api, sandbox, role_named_group):
     u = api.create_user()
     api.add_to_group(role_named_group, u.id)
@@ -119,7 +111,6 @@ def test_a2_3_group_named_like_role_does_not_leak_private_docs(api, sandbox, rol
     assert search_ids(api, sandbox, u) == [], "member of group 'Editor' finds a private doc via search"
 
 
-@pytest.mark.known_divergence(NICK, reason="principal and role tokens share one unprefixed ACL namespace", ref="A2#3")
 def test_a2_3_user_named_like_role_does_not_leak_private_docs(api, sandbox):
     for side in api.sides:
         side.request("DELETE", "@users/Reader", side.admin)
@@ -132,7 +123,6 @@ def test_a2_3_user_named_like_role_does_not_leak_private_docs(api, sandbox):
 
 # ---------------------------------------------------------------- A2#4
 
-@pytest.mark.known_divergence(NICK, reason="transition not checked against the current state's transitions", ref="A2#4")
 def test_a2_4_transition_not_available_in_state_is_400(api, sandbox):
     """published -> submit is not a transition of 'published' (only reject/retract)."""
     api.doc(sandbox, "d")
@@ -152,14 +142,12 @@ def test_a2_4_same_state_transition_is_a_noop_200(api, sandbox):
     assert api.state(f"{sandbox}/d") == "published"
 
 
-@pytest.mark.known_divergence(NICK, reason="unknown transition id -> TypeError -> 500", ref="A2#4")
 def test_a2_4_unknown_transition_is_400(api, sandbox):
     api.doc(sandbox, "d")
     r = api.post(f"{sandbox}/d/@workflow/no-such-transition")
     assert r.status == 400, r
 
 
-@pytest.mark.known_divergence(NICK, reason="include_children reuses the parent's permissions for descendants", ref="A2#4")
 def test_a2_4_include_children_checks_each_child(api, sandbox):
     """A local Reviewer of f publishes f with include_children. f/sub blocks
     inheritance, so the reviewer has no rights on f/sub/d: d must stay private."""
@@ -176,7 +164,6 @@ def test_a2_4_include_children_checks_each_child(api, sandbox):
 # ---------------------------------------------------------------- A2#5
 
 @pytest.mark.parametrize("persona,expected", [("anonymous", 401), ("member", 401)], ids=["anonymous", "member"])
-@pytest.mark.known_divergence(NICK, reason="PATCH @history (revert) only requires View", ref="A2#5")
 def test_a2_5_revert_requires_revert_permission(api, sandbox, persona, expected):
     api.publish(sandbox)
     api.doc(sandbox, "d", title="v0")
@@ -187,8 +174,6 @@ def test_a2_5_revert_requires_revert_permission(api, sandbox, persona, expected)
     assert api.get(f"{sandbox}/d", compare=False).json["title"] == "v1"
 
 
-@pytest.mark.known_divergence(NICK, reason="every version reports may_revert: true (models/version/version.ts:74)",
-                              ref="A2#5")
 def test_a2_5_may_revert_false_for_reader(api, sandbox):
     u = api.create_user()
     api.doc(sandbox, "d", title="v0")
@@ -201,7 +186,6 @@ def test_a2_5_may_revert_false_for_reader(api, sandbox):
     assert versions and not any(e.get("may_revert") for e in versions), versions
 
 
-@pytest.mark.known_divergence(NICK, reason="revert skips the catalog reindex", ref="A2#5")
 def test_a2_5_revert_reindexes(api, sandbox):
     api.doc(sandbox, "d", title="alphaoriginal")
     api.patch(f"{sandbox}/d", json={"title": "betachanged"}, compare=False)
@@ -212,7 +196,6 @@ def test_a2_5_revert_reindexes(api, sandbox):
 
 # ---------------------------------------------------------------- A2#6
 
-@pytest.mark.known_divergence(NICK, reason="POST accepts client-supplied workflow_history", ref="A2#6")
 def test_a2_6_workflow_history_cannot_be_forged_on_create(api, sandbox):
     forged = [{"action": "publish", "actor": "mallory-forged", "review_state": "published",
                "time": "2001-01-01T00:00:00+00:00", "comments": "forged entry"}]
@@ -245,7 +228,6 @@ def test_a2_6_workflow_get_lists_history(api, sandbox):
 
 # ---------------------------------------------------------------- A2#7
 
-@pytest.mark.known_divergence(NICK, reason="document.owner ON DELETE CASCADE deletes the user's content", ref="A2#7")
 def test_a2_7_deleting_user_keeps_their_content(api, sandbox):
     u = api.create_user(cleanup=False)
     api.share(sandbox, u, ["Contributor"])
@@ -257,7 +239,6 @@ def test_a2_7_deleting_user_keeps_their_content(api, sandbox):
     assert api.get(f"{sandbox}/theirs/deep").status == 200
 
 
-@pytest.mark.known_divergence(NICK, reason="version.actor ON DELETE CASCADE removes versions they authored", ref="A2#7")
 def test_a2_7_deleting_user_keeps_versions_they_authored(api, sandbox):
     u = api.create_user(cleanup=False)
     api.doc(sandbox, "d", title="v0")
