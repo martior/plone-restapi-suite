@@ -16,6 +16,7 @@ from restapi_suite.services import history_actions, versions
 pytestmark = pytest.mark.area("history")
 
 NICK = "nick"
+PLONE = "plone"
 
 
 def _doc_with_edits(api, sandbox, n=2, **kw):
@@ -109,13 +110,17 @@ def test_history_workflow_transition_does_not_create_version(api, sandbox):
     assert [e["version"] for e in versions(_hist(api, path))] == [0]
 
 
-@pytest.mark.plone_bug("passing effective/expires to a transition deserializes them as an edit, which "
-                       "fires ObjectModified and creates an unnamed version")
-@pytest.mark.known_divergence(NICK, reason="Nick ignores transition dates, so no version", kind="plone-bug")
-def test_history_transition_with_dates_creates_version(api, sandbox):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="passing effective/expires to a transition deserializes them as an edit, "
+                                     "which fires ObjectModified and creates an unnamed version")
+def test_history_transition_with_dates_sets_dates_without_version(api, sandbox):
+    """workflow.md: a transition can set effective and expiration dates. That is part of the
+    transition, not an edit: classic Plone (plone.app.content content_status_modify) sets them
+    without an ObjectModified event, so no version appears, as for any other transition."""
     path = api.doc(sandbox, "d")
     api.publish(path, effective="2030-01-01T00:00:00")
-    assert [e["version"] for e in versions(_hist(api, path))] == [1, 0]
+    assert (api.get(path).json.get("effective") or "").startswith("2030-01-01"), api.get(path)
+    assert [e["version"] for e in versions(_hist(api, path))] == [0]
 
 
 @pytest.mark.known_divergence(NICK, reason="Nick versions folders; Plone's Folder type has no versioning",
@@ -150,17 +155,20 @@ def test_history_content_reports_current_version(api, sandbox):
     assert api.get(path).json.get("version") == "current"
 
 
-@pytest.mark.plone_bug("a version that does not exist is a 500 (CMFEditions ArchivistRetrieveError), not 404")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick answers 404")
-def test_history_get_unknown_version_is_500(api, sandbox):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1", reason="a version that does not exist is a 500 "
+                              "(CMFEditions ArchivistRetrieveError), not 404")
+def test_history_get_unknown_version_is_404(api, sandbox):
+    """usage/content.md: 404 Not Found if a resource cannot be found."""
     path = _doc_with_edits(api, sandbox, n=1)
-    assert api.get(f"{path}/@history/99").status == 500
+    assert api.get(f"{path}/@history/99").status == 404
 
 
-@pytest.mark.plone_bug("a non-integer version is a 500 (int() ValueError), not 400")
-def test_history_get_non_integer_version_is_500(api, sandbox):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="a non-integer version is a 500 (int() ValueError)")
+def test_history_get_non_integer_version_is_4xx(api, sandbox):
+    """No version is called 'abc': 404 (no such resource) or 400 (malformed version), never 500."""
     path = _doc_with_edits(api, sandbox, n=1)
-    assert api.get(f"{path}/@history/abc").status == 500
+    assert api.get(f"{path}/@history/abc").status in (400, 404)
 
 
 @pytest.mark.parametrize("persona,allowed", [("anonymous", False), ("member", False), ("local_editor", True),
@@ -239,30 +247,36 @@ def test_history_revert_denied_for_local_reader(api, sandbox):
     assert api.get(path).json["title"] == "v1"
 
 
-@pytest.mark.plone_bug("revert does not follow edit permission: in pending an Editor cannot PATCH the "
-                       "item but can still revert it ('Revert to previous versions' is not workflow-managed)")
-def test_history_editor_reverts_pending_item_it_cannot_edit(api, sandbox):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="revert does not follow edit permission: in pending an Editor cannot PATCH "
+                                     "the item but can still revert it ('CMFEditions: Revert to previous versions' "
+                                     "is not workflow-managed)")
+def test_history_editor_cannot_revert_pending_item_it_cannot_edit(api, sandbox):
+    """A revert rewrites the content, so it needs the right to edit the item in its current state:
+    the workflow takes Modify portal content away from Editor in pending, and revert must follow."""
     path = _doc_with_edits(api, sandbox, n=1)
     api.transition(path, "submit")
     assert api.patch(path, as_="local_editor", json={"title": "x"}).status in DENIED
-    assert api.patch(f"{path}/@history", as_="local_editor", json={"version": 0}).status == 200
-    assert api.get(path).json["title"] == "v0"
-
-
-@pytest.mark.plone_bug("PATCH @history without 'version' is an unhandled KeyError, answered as 503")
-@pytest.mark.known_divergence(NICK, reason="Nick answers 500; neither validates the body", kind="plone-bug")
-def test_history_revert_without_version_is_error(api, sandbox):
-    path = _doc_with_edits(api, sandbox, n=1)
-    r = api.patch(f"{path}/@history", json={})
-    assert r.status == 503, r
+    assert api.patch(f"{path}/@history", as_="local_editor", json={"version": 0}).status in DENIED
     assert api.get(path).json["title"] == "v1"
 
 
-@pytest.mark.plone_bug("reverting to a version that does not exist is a 500, not 404/400")
-@pytest.mark.known_divergence(NICK, reason="Nick answers 404", kind="plone-bug")
-def test_history_revert_unknown_version_is_500(api, sandbox):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="PATCH @history without 'version' is an unhandled KeyError, answered as 503")
+def test_history_revert_without_version_is_400(api, sandbox):
+    """history.md: the revert body names the version; without it the request is malformed."""
     path = _doc_with_edits(api, sandbox, n=1)
-    assert api.patch(f"{path}/@history", json={"version": 99}).status == 500
+    r = api.patch(f"{path}/@history", json={})
+    assert r.status == 400, r
+    assert api.get(path).json["title"] == "v1"
+
+
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="reverting to a version that does not exist is a 500")
+def test_history_revert_unknown_version_is_4xx(api, sandbox):
+    """The named version does not exist: 404 or 400, never 500, and nothing changes."""
+    path = _doc_with_edits(api, sandbox, n=1)
+    assert api.patch(f"{path}/@history", json={"version": 99}).status in (400, 404)
     assert api.get(path).json["title"] == "v1"
 
 

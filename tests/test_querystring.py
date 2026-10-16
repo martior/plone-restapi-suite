@@ -312,14 +312,14 @@ def test_qs_sort_order_descending(api, sandbox):
     assert ordered_ids(r) == ["gamma", "delta", "beta", "alpha"]
 
 
-@pytest.mark.plone_bug("querystringsearch.md documents sort_order 'reverse' as an alias of 'descending', "
-                       "but Plone sorts ascending (only @search honours 'reverse')")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick treats every value other than "
-                              "'ascending' as descending, which matches the documentation")
-def test_qs_sort_order_reverse_is_ignored(api, sandbox):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="sort_order 'reverse' sorts ascending in @querystring-search "
+                                     "(only @search honours 'reverse')")
+def test_qs_sort_order_reverse_is_descending(api, sandbox):
+    """querystringsearch.md:143: "`reverse` is an alias equivalent to `descending`"."""
     seed(api, sandbox)
     r = qs(api, sandbox, [HERE, DOC], sort_on="sortable_title", sort_order="reverse")
-    assert ordered_ids(r) == ["alpha", "beta", "delta", "gamma"]
+    assert ordered_ids(r) == ["gamma", "delta", "beta", "alpha"]
 
 
 def test_qs_sort_on_position_in_parent(api, sandbox):

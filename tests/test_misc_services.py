@@ -306,8 +306,11 @@ def test_manual_alias_add_list_delete(api, sandbox):
     assert api.get(alias.lstrip("/")).status == 404
 
 
-@pytest.mark.plone_bug("an alias that collides with existing content is refused with 200 and "
-                       "{type: error, failed: [...]} instead of a 4xx")
+@pytest.mark.compat("an alias that collides with existing content is refused with 200 and "
+                    "{type: error, failed: [...]} instead of a 4xx; Volto's per-item Aliases form only "
+                    "recognises the refusal on a 2xx: volto 19.5.0 packages/volto/src/reducers/aliases/aliases.js:67-75 "
+                    "(ADD_ALIASES_SUCCESS: error = result.failed) and components/manage/Aliases/Aliases.jsx:136-138 "
+                    "(isAliasAlready only when add.loaded, which ADD_ALIASES_FAIL leaves false)")
 def test_manual_alias_onto_existing_content_is_refused(api, sandbox):
     path = api.doc(sandbox, "d")
     api.doc(sandbox, "taken")

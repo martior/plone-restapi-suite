@@ -14,6 +14,10 @@ from restapi_suite.assertions import DENIED
 pytestmark = pytest.mark.area("locking")
 
 NICK = "nick"
+PLONE = "plone"
+# "refused because of the lock": Plone answers 403 for edits and 423 for deletes of a locked
+# item, Nick 401 'Already locked'; RFC 4918 section 11.3 has 423 Locked, RFC 9110 409 Conflict.
+LOCKED = (401, 403, 409, 423)
 
 
 @pytest.fixture
@@ -78,14 +82,17 @@ def test_lock_relock_by_owner_keeps_token(api, locked_doc):
     assert r.status == 200 and r.json["token"] == token, r
 
 
-@pytest.mark.known_divergence(NICK, reason="locking an item locked by someone else is 401 'Already locked' "
-                              "(Plone silently returns the existing lock)", kind="plone-bug")
-@pytest.mark.plone_bug("POST @lock on an item locked by another user answers 200 with the other user's "
-                       "lock instead of an error")
-def test_lock_by_other_user_returns_existing_lock(api, locked_doc):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="POST @lock on an item locked by another user answers 200 with the other "
+                                     "user's lock (and token) instead of an error")
+def test_lock_by_other_user_is_refused(api, locked_doc):
+    """locking.md: "If a second user tries to edit the object at the same time, she will see a
+    message that this object is locked." Taking the lock must fail and leave a's lock alone."""
     path, a, b, token = locked_doc
     r = api.post(f"{path}/@lock", as_=b)
-    assert r.status == 200 and r.json["creator"] == a.id and r.json["token"] == token, r
+    assert r.status in LOCKED, r
+    j = _lock(api, path)
+    assert j["creator"] == a.id and j["token"] == token, j
 
 
 @pytest.mark.parametrize("persona", ["anonymous", "member"])
@@ -163,12 +170,18 @@ def test_lock_wrong_token_is_refused(api, locked_doc):
     assert r.status in (401, 403), r
 
 
-@pytest.mark.plone_bug("the lock token alone authorizes the edit: another editor who learns the token "
-                       "(GET @lock shows it to anyone with View) can edit the locked item")
-def test_lock_token_from_get_lets_other_editor_edit(api, locked_doc):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="the lock token alone authorizes the edit: another editor who learns the "
+                                     "token (GET @lock and the content GET show it to anyone with View) can edit "
+                                     "the locked item")
+def test_lock_token_from_get_does_not_let_other_editor_edit(api, locked_doc):
+    """The token proves that a request belongs to the lock holder's session; it must not
+    let another user edit around the lock (locking.md "Updating a locked object")."""
     path, a, b, token = locked_doc
     leaked = _lock(api, path, as_=b)["token"]
-    assert api.patch(path, as_=b, json={"title": "b"}, headers={"Lock-Token": leaked}).status == 204
+    r = api.patch(path, as_=b, json={"title": "b"}, headers={"Lock-Token": leaked})
+    assert r.status in LOCKED, r
+    assert api.get(path).json["title"] == "t0"
 
 
 def test_lock_survives_edit_with_token(api, locked_doc):
@@ -194,10 +207,14 @@ def test_lock_blocks_delete_by_other_user(api, locked_doc):
     assert api.get(path).status == 200
 
 
-@pytest.mark.plone_bug("workflow transitions ignore the lock")
-def test_lock_does_not_block_workflow_transition(api, locked_doc):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1", reason="workflow transitions ignore the lock")
+def test_lock_blocks_workflow_transition_by_other_user(api, locked_doc):
+    """A lock held by a blocks state changes by others, as it blocks edits and deletes. Classic
+    Plone offers no transitions on an item locked for the current user
+    (plone.app.contentmenu WorkflowMenu: is_locked_for_current_user)."""
     path, a, b, token = locked_doc
-    assert api.post(f"{path}/@workflow/publish").status == 200
+    assert api.post(f"{path}/@workflow/publish").status in LOCKED
+    assert api.state(path) == "private"
     assert _lock(api, path)["locked"] is True
 
 
@@ -221,14 +238,16 @@ def test_lock_refresh_keeps_timeout(api, sandbox):
     assert r.status == 200 and r.json["timeout"] == 3600, r
 
 
-@pytest.mark.plone_bug("PATCH @lock by another editor refreshes someone else's lock (200, lock unchanged) "
-                       "instead of refusing")
-@pytest.mark.known_divergence(NICK, reason="Nick refuses with 401 'Already locked' (arguably right)",
-                              kind="plone-bug")
-def test_lock_refresh_by_other_user(api, locked_doc):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="PATCH @lock by another editor refreshes someone else's lock (200) and "
+                                     "returns its token instead of refusing")
+def test_lock_refresh_by_other_user_is_refused(api, locked_doc):
+    """Only the holder may extend a lock; otherwise anyone with edit rights keeps a's lock alive."""
     path, a, b, token = locked_doc
     r = api.patch(f"{path}/@lock", as_=b)
-    assert r.status == 200 and r.json["creator"] == a.id and r.json["token"] == token, r
+    assert r.status in LOCKED, r
+    j = _lock(api, path)
+    assert j["creator"] == a.id and j["token"] == token, j
 
 
 def test_lock_refresh_unlocked_item(api, sandbox):
@@ -284,12 +303,13 @@ def test_unlock_force_by_admin_cannot_remove_non_stealable_lock(api, sandbox):
     assert _lock(api, path)["locked"] is True
 
 
-@pytest.mark.plone_bug("a refused force-unlock still removes the non-stealable marker "
-                       "(services/locking/delete.py: noLongerProvides runs after the failed unlock), "
-                       "so a second force-unlock steals the lock")
-@pytest.mark.known_divergence(NICK, reason="Nick keeps the non-stealable lock after a refused force-unlock (arguably right)",
-                              kind="plone-bug")
-def test_unlock_failed_force_makes_lock_stealable(api, sandbox):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="a refused force-unlock still removes the non-stealable marker "
+                                     "(services/locking/delete.py: noLongerProvides runs after the failed unlock), "
+                                     "so a second force-unlock steals the lock")
+def test_unlock_failed_force_keeps_lock_non_stealable(api, sandbox):
+    """locking.md: a lock created with "stealable": false cannot be unlocked by another user,
+    however often they try."""
     path = api.doc(sandbox, "d")
     a, b = api.create_user(), api.create_user()
     api.share(path, a, ["Editor"])
@@ -298,7 +318,8 @@ def test_unlock_failed_force_makes_lock_stealable(api, sandbox):
     api.delete(f"{path}/@lock", as_=b, json={"force": True})
     assert _lock(api, path)["locked"] is True
     api.delete(f"{path}/@lock", as_=b, json={"force": True})
-    assert _lock(api, path)["locked"] is False
+    j = _lock(api, path)
+    assert j["locked"] is True and j["stealable"] is False, j
 
 
 @pytest.mark.parametrize("persona", ["anonymous", "member"])

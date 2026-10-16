@@ -21,8 +21,7 @@ from restapi_suite.services import jwt_payload, login, with_token
 pytestmark = pytest.mark.area("auth")
 
 NICK = "nick"
-STATELESS = dict(reason="Nick revokes tokens on @logout; Plone's JWT plugin does not store tokens by default",
-                 kind="plone-bug")
+PLONE = "plone"
 
 
 def _b64(d: dict) -> str:
@@ -83,11 +82,12 @@ def test_login_missing_credentials_is_400(api, body):
     assert r.json["error"]["type"] == "Missing credentials", r
 
 
-@pytest.mark.plone_bug("a non-JSON @login body is a 500 ('No JSON object could be decoded')")
-@pytest.mark.known_divergence(NICK, reason="Nick answers 400 with an HTML error page", kind="plone-bug")
-def test_login_invalid_json_is_500(api):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="a non-JSON @login body is a 500 ('No JSON object could be decoded')")
+def test_login_invalid_json_is_400(api):
+    """A malformed body is a client error (usage/content.md: 400 for a malformed request)."""
     r = api.post("@login", as_="anonymous", content="{not json", headers={"Content-Type": "application/json"})
-    assert r.status == 500, r
+    assert r.status == 400, r
 
 
 def test_login_by_email_not_enabled_by_default(api):
@@ -198,14 +198,16 @@ def test_logout_anonymous_is_204(api):
     assert api.post("@logout", as_="anonymous").status == 204
 
 
-@pytest.mark.plone_bug("@logout does not invalidate the JWT (stateless tokens, store_tokens=False): "
-                       "a logged-out token keeps working until it expires")
-@pytest.mark.known_divergence(NICK, **STATELESS)
-def test_logout_token_still_valid(api):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="@logout answers 204 but does not invalidate the JWT (store_tokens=False "
+                                     "by default): a logged-out token keeps working until it expires")
+def test_logout_invalidates_token(api):
+    """usage/authentication.md: "The @logout endpoint can be used to invalidate tokens." A token that
+    still works after a successful logout survives the user's attempt to end the session."""
     u = api.create_user()
     tok = _token(api, u)
     assert with_token(api.t, "POST", "@logout", tok).status == 204
-    assert _me(api, u, tok).status == 200
+    assert _me(api, u, tok).status == 401
 
 
 def test_logout_does_not_affect_other_session(api):

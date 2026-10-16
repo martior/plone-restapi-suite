@@ -230,11 +230,12 @@ def test_post_unknown_type_is_403(api, sandbox):
     assert "NoSuchType" in err_message(r), r
 
 
-@pytest.mark.plone_bug("malformed JSON body on POST is a 500 (json_body raises DeserializationError outside the try)")
-@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick answers 400 (but with an HTML body, see next test)")
-def test_post_invalid_json_is_500(api, sandbox):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1", reason="malformed JSON body on POST is a 500 "
+                              "(json_body raises DeserializationError outside the try)")
+def test_post_invalid_json_is_400(api, sandbox):
+    """usage/content.md: 400 Bad Request for a malformed request."""
     r = api.post(sandbox, content="{not json", headers={"Content-Type": "application/json"})
-    assert r.status == 500, r
+    assert r.status == 400, r
 
 
 def test_post_invalid_json_error_is_json(api, sandbox):
@@ -243,11 +244,12 @@ def test_post_invalid_json_error_is_json(api, sandbox):
     assert r.status >= 400 and r.is_json and r.json is not None, r
 
 
-@pytest.mark.plone_bug("a JSON array body on POST is a 500 (AttributeError: list has no .get)")
-@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick answers 400 (no @type)")
-def test_post_json_array_body_is_500(api, sandbox):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="a JSON array body on POST is a 500 (AttributeError: list has no .get)")
+def test_post_json_array_body_is_400(api, sandbox):
+    """The body must be a JSON object (usage/content.md: 400 for a malformed request)."""
     r = api.post(sandbox, json=[{"@type": "{type:document}", "title": "x"}])
-    assert r.status == 500, r
+    assert r.status == 400, r
 
 
 def test_post_unknown_field_is_ignored(api, sandbox):
@@ -349,13 +351,15 @@ def test_post_unusual_explicit_id_is_kept(api, sandbox, odd_id):
     assert r.json["id"] == odd_id
 
 
-@pytest.mark.plone_bug("ids starting with '@' are accepted and the child then shadows the @-service of the same name")
-@pytest.mark.known_divergence("nick", kind="plone-bug", reason="the @-service wins over a child with the same id")
-def test_post_child_named_like_service_shadows_it(api, sandbox):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1", reason="ids starting with '@' are accepted and "
+                              "the child then shadows the @-service of the same name")
+def test_post_id_starting_with_at_is_400(api, sandbox):
+    """'@name' path segments address services (plone.rest), so such an id is invalid: a child called
+    '@search' would replace the search service of the folder for everyone."""
     r = api.post(sandbox, json={"@type": "{type:document}", "id": "@search", "title": "Shadow"})
-    assert r.status == 201, r
+    assert r.status == 400, r
     s = api.get(f"{sandbox}/@search")
-    assert s.status == 200 and s.json.get("title") == "Shadow", s
+    assert s.status == 200 and "items" in s.json and s.json.get("title") != "Shadow", s
 
 
 def test_post_uid_as_admin_is_honoured(api, sandbox):
@@ -575,19 +579,22 @@ def test_order_subset_ids_mismatch_is_400(api, abcd):
     assert _ids(api, abcd) == list("abcd")
 
 
-@pytest.mark.plone_bug("an unknown ordering obj_id is silently ignored (204, nothing moves)")
-def test_order_unknown_obj_id_is_ignored(api, abcd):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="an unknown ordering obj_id is silently ignored (204, nothing moves)")
+def test_order_unknown_obj_id_is_400(api, abcd):
+    """The request names a child that does not exist: 400, like the documented subset_ids mismatch
+    (usage/content.md "Reordering sub resources")."""
     r = api.patch(abcd, json={"ordering": {"obj_id": "zzz", "delta": 1}})
-    assert r.status == 204, r
+    assert r.status == 400, r
     assert _ids(api, abcd) == list("abcd")
 
 
-@pytest.mark.plone_bug("a non-integer ordering delta is a 500 (int('sideways') ValueError)")
-@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick silently ignores the invalid delta (204); "
-                              "400 would be right for both")
-def test_order_invalid_delta_is_500(api, abcd):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="a non-integer ordering delta is a 500 (int('sideways') ValueError)")
+def test_order_invalid_delta_is_400(api, abcd):
+    """usage/content.md: delta is 'top', 'bottom' or an integer; anything else is a malformed request."""
     r = api.patch(abcd, json={"ordering": {"obj_id": "a", "delta": "sideways"}})
-    assert r.status == 500, r
+    assert r.status == 400, r
     assert _ids(api, abcd) == list("abcd")
 
 

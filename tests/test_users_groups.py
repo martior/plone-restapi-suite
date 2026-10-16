@@ -278,18 +278,24 @@ def test_users_admin_sets_password(api):
     assert login(api.t, u.id, u.password).status == 401
 
 
-@pytest.mark.plone_bug("PATCH @users bypasses the password policy: a 5 character password is stored")
-@pytest.mark.known_divergence(NICK, reason="Nick applies the password policy on PATCH (400)", kind="plone-bug")
-def test_users_admin_patch_short_password_accepted(api):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="PATCH @users bypasses the password policy: a 5 character password is stored")
+def test_users_admin_patch_short_password_is_400(api):
+    """POST @users enforces the password policy (400 for a short password); PATCH must too,
+    or every policy is one request away from being bypassed."""
     u = api.create_user()
-    assert api.patch(f"@users/{u.id}", json={"password": "short"}).status == 204
-    assert login(api.t, u.id, "short").status == 200
+    assert api.patch(f"@users/{u.id}", json={"password": "short"}).status == 400
+    assert login(api.t, u.id, "short").status != 200
+    assert login(api.t, u.id, u.password).status == 200
 
 
-@pytest.mark.plone_bug("PATCH @users accepts an invalid email address")
-def test_users_patch_invalid_email_accepted(api):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="PATCH @users accepts an invalid email address")
+def test_users_patch_invalid_email_is_400(api):
+    """POST @users refuses an invalid email (400); PATCH must validate the same field the same way."""
     u = api.create_user()
-    assert api.patch(f"@users/{u.id}", json={"email": "not-an-email"}).status == 204
+    assert api.patch(f"@users/{u.id}", json={"email": "not-an-email"}).status == 400
+    assert api.get(f"@users/{u.id}").json.get("email") != "not-an-email"
 
 
 def test_users_reset_own_password(api):

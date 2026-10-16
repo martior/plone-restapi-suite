@@ -252,14 +252,15 @@ def test_sharing_inherit_false_keeps_global_editor_access_to_private(api, sandbo
     assert api.get(sub, as_="site_admin").status == 200
 
 
-@pytest.mark.plone_bug("local roles for a principal that does not exist are stored and listed (no 400)")
-@pytest.mark.known_divergence(NICK, reason="unknown principals are not listed (Nick lists no entries at all)",
-                              kind="plone-bug")
-def test_sharing_post_unknown_principal(api, sandbox):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="local roles for a principal that does not exist are stored and listed (no 400)")
+def test_sharing_post_unknown_principal_is_400(api, sandbox):
+    """Granting a role to a user that does not exist is a malformed request. Storing it is also a
+    latent grant: whoever later registers that id inherits the roles."""
     r = api.post(f"{sandbox}/@sharing", json={"entries": [{"id": "rs-no-such-user-q", "type": "user",
                                                           "roles": {"Reader": True}}]})
-    assert r.status == 204, r
-    assert "rs-no-such-user-q" in entries(sharing(api, sandbox))
+    assert r.status == 400, r
+    assert "rs-no-such-user-q" not in entries(sharing(api, sandbox))
 
 
 def test_sharing_post_undelegatable_roles_ignored(api, sandbox):

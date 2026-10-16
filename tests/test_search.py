@@ -30,6 +30,7 @@ from restapi_suite.listing import get_each, ids, ordered_ids, phys
 pytestmark = pytest.mark.area("search")
 
 NICK = "nick"
+PLONE = "plone"
 
 
 def sb_id(sandbox: str) -> str:
@@ -208,14 +209,17 @@ def test_search_subject_reindexed_after_edit(api, sandbox):
 @pytest.mark.parametrize("depth,expected", [
     (0, ["SB"]),
     (1, ["alpha", "beta", "sub"]),
-    (2, ["SB", "alpha", "beta", "delta", "gamma", "sub"]),
+    (2, ["alpha", "beta", "delta", "gamma", "sub"]),
     (-1, ["SB", "alpha", "beta", "delta", "gamma", "sub"]),
 ])
-@pytest.mark.plone_bug("ExtendedPathIndex: depth=1 excludes the context itself but depth>=2 includes it again")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", ids=["2-*"],
-                              reason="Nick excludes the context for every depth >= 1 (consistent)")
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ids=["2-*"], ref="F1",
+                              reason="ExtendedPathIndex: depth=1 excludes the context itself but depth>=2 "
+                                     "includes it again")
 def test_search_path_depth(api, sandbox, depth, expected):
-    """path.depth without path.query applies to the context path."""
+    """path.depth without path.query applies to the context path. searching.md:44-46: with
+    path.depth=1 "the container itself won't be part of the results"; a depth limit of N >= 1
+    means the descendants up to N levels, so the container stays out for every N >= 1.
+    Without a limit (-1, the default) the container is included."""
     seed(api, sandbox)
     exp = sorted(sb_id(sandbox) if e == "SB" else e for e in expected)
     assert ids(s(api, sandbox, **{"path.depth": depth})) == exp
@@ -347,25 +351,29 @@ def test_search_searchable_text_special_but_valid(api, sandbox, term, expected):
 
 
 @pytest.mark.parametrize("term", ["", "  ", "(", ")", "*"])
-@pytest.mark.plone_bug("an empty/operator-only SearchableText answers 200 with a bare JSON list [] "
-                       "instead of a search result object")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick answers a normal empty result object "
-                              "(or 500 for parentheses, see test_search_searchable_text_never_500)")
-def test_search_searchable_text_empty_query_bare_list(api, sandbox, term):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="an empty/operator-only SearchableText answers 200 with a bare JSON list [] "
+                                     "instead of a search result object")
+def test_search_searchable_text_empty_query_is_result_object(api, sandbox, term):
+    """searching.md: @search answers a (batched) result object with items and items_total."""
     seed(api, sandbox)
     r = s(api, sandbox, SearchableText=term)
-    assert r.status == 200 and r.json == [], r
+    assert r.status == 200 and isinstance(r.json, dict), r
+    assert isinstance(r.json.get("items"), list) and r.json.get("items_total") == len(r.json["items"]), r
 
 
 @pytest.mark.parametrize("term", ['"', "?", "\\", "%", "'", "AND", "OR", "NOT", "-", "@", "zebra NOT alpha", "\u200b"])
-@pytest.mark.plone_bug("ZCTextIndex query parse errors ('Query contains only common words', 'Token <ATOM> "
-                       "required') are not mapped to 400: @search answers 500 with a traceback")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick parses every term safely and answers 200 "
-                              "(plone.restapi documents no parse errors)")
-def test_search_searchable_text_parse_error_is_500(api, sandbox, term):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="ZCTextIndex query parse errors ('Query contains only common words', "
+                                     "'Token <ATOM> required') are not mapped: @search answers 500 with a traceback")
+def test_search_searchable_text_odd_term_is_not_500(api, sandbox, term):
+    """Search box input is user input: a term that is not a valid query is either searched
+    for safely (200 with a result object) or refused as a bad request (400), never a 500."""
     seed(api, sandbox)
     r = s(api, sandbox, SearchableText=term)
-    assert r.status == 500, r
+    assert r.status in (200, 400), r
+    if r.status == 200:
+        assert isinstance(r.json, dict) and isinstance(r.json.get("items"), list), r
 
 
 @pytest.mark.parametrize("term", ["(", ")", "<script>", "zebra AND alpha", '"alpha zebra"', "zebra OR beta"])
@@ -482,13 +490,13 @@ def test_search_effective_range_only_published(api, sandbox):
     assert ids(r) == sorted(["alpha", "delta", "sub", sb_id(sandbox)])
 
 
-@pytest.mark.plone_bug("an unparseable date in a range query is a 500 (DateIndex type error), not a 400")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick ignores range queries altogether: 200 "
-                              "(the missing range support itself is test_search_date_ranges)")
-def test_search_invalid_date_is_500(api, sandbox):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="an unparseable date in a range query is a 500 (DateIndex type error)")
+def test_search_invalid_date_is_400(api, sandbox):
+    """An unparseable query value is a malformed request: 400."""
     seed(api, sandbox)
     r = s(api, sandbox, **{"created.query": "not-a-date", "created.range": "min"})
-    assert r.status == 500, r
+    assert r.status == 400, r
 
 
 def test_search_unknown_range_is_ignored(api, sandbox):
@@ -572,18 +580,22 @@ def test_search_negative_b_start_is_start(api, sandbox):
 
 @pytest.mark.parametrize("params", [{"b_size": "abc"}, {"b_start": "x"}, {"b_size": -1}],
                          ids=["b_size-abc", "b_start-x", "b_size-negative"])
-@pytest.mark.plone_bug("non-integer or negative batch parameters are a 500 (ValueError), not a 400")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick is lenient (parseInt fallback): 200")
-def test_search_invalid_batch_params_500(api, sandbox, params):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="non-integer or negative batch parameters are a 500 (ValueError)")
+def test_search_invalid_batch_params_400(api, sandbox, params):
+    """batching.md:63-68: b_start is the first item and b_size the batch size, i.e. non-negative
+    integers; anything else is a malformed request."""
     seed(api, sandbox)
-    assert s(api, sandbox, **params).status == 500
+    assert s(api, sandbox, **params).status == 400
 
 
-@pytest.mark.plone_bug("a non-integer path.depth is a 500 (ExtendedPathIndex), not a 400")
-@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick ignores a non-integer depth: 200")
-def test_search_invalid_path_depth_500(api, sandbox):
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="a non-integer path.depth is a 500 (ExtendedPathIndex)")
+def test_search_invalid_path_depth_400(api, sandbox):
+    """searching.md:143: the depth string is turned back into an integer; one that is not an integer
+    is a malformed request."""
     seed(api, sandbox)
-    assert s(api, sandbox, **{"path.depth": "x"}).status == 500
+    assert s(api, sandbox, **{"path.depth": "x"}).status == 400
 
 
 def test_search_default_batch_size_is_25(api, sandbox):
@@ -595,9 +607,10 @@ def test_search_default_batch_size_is_25(api, sandbox):
     assert "next" in r.json["batching"]
 
 
-@pytest.mark.plone_bug("paging a sort with ties is not stable: with 9 equal titles, b_size=4 pages "
-                       "repeat t0 and drop another item (ZCatalog limit sort is not stable across b_start)")
-@pytest.mark.known_divergence("plone*", kind="plone-bug", reason="Plone itself repeats/drops items when paging ties")
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="paging a sort with ties is not stable: with 9 equal titles, b_size=4 pages "
+                                     "repeat t0 and drop another item (ZCatalog limit sort is not stable across "
+                                     "b_start)")
 def test_search_pagination_stable_with_ties(api, sandbox):
     """Paging through a sort with ties (equal titles) yields each item exactly once."""
     for n in range(9):

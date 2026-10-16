@@ -14,6 +14,7 @@ from restapi_suite.services import transition_ids
 pytestmark = pytest.mark.area("workflow")
 
 NICK = "nick"
+PLONE = "plone"
 
 
 def _local(api, sandbox, role):
@@ -160,10 +161,12 @@ def test_workflow_republish_keeps_first_effective(api, sandbox):
     assert api.get(path).json["effective"].startswith("2029-03-03T10:00")
 
 
-@pytest.mark.plone_bug("any transition (even submit) stamps effective with 'now' when it is empty, "
-                       "so a never-published item gets a publication date")
-@pytest.mark.known_divergence(NICK, reason="Nick sets effective only when an item is published", kind="plone-bug")
+@pytest.mark.known_divergence(NICK, kind="deliberate",
+                              reason="Nick sets effective only when an item is published")
 def test_workflow_submit_also_sets_effective(api, sandbox):
+    """Plone policy, not a bug: every successful transition stamps an empty effective date with
+    'now', in the classic UI too (plone.app.content content_status_modify: "Make sure an
+    effective date is always set when there is a valid workflow action", and folder_contents)."""
     path = api.doc(sandbox, "d")
     api.transition(path, "submit")
     eff = api.get(path).json.get("effective")
@@ -212,18 +215,20 @@ def test_workflow_include_children_tolerates_child_already_in_target_state(api, 
     assert api.state(f"{f}/sub/d2") == "published"
 
 
-@pytest.mark.plone_bug("include_children is not atomic: the WorkflowException of a child becomes a 400 "
-                       "response, but the transaction is committed, so the parent stays transitioned")
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="include_children is not atomic: the WorkflowException of a child becomes a "
+                                     "400 response, but the transaction is committed, so the parent stays "
+                                     "transitioned")
 @pytest.mark.known_divergence(NICK, reason="no per-child validation: the published child is submitted, 200",
                               ref="A2#4")
-def test_workflow_include_children_invalid_child_is_400_but_not_atomic(api, sandbox):
-    """submit is invalid for a published child. Plone answers 400 but keeps
-    the parent's transition and stops at the failing child."""
+def test_workflow_include_children_invalid_child_is_400_and_atomic(api, sandbox):
+    """submit is invalid for a published child. An error response means nothing happened
+    (RFC 9110 15.5: the request was not applied), so the parent stays private too."""
     f = _tree(api, sandbox)
     api.publish(f"{f}/d1")
     r = api.post(f"{f}/@workflow/submit", json={"include_children": True})
     assert r.status == 400, r
-    assert api.state(f) == "pending"
+    assert api.state(f) == "private"
     assert api.state(f"{f}/d1") == "published"
     assert api.state(f"{f}/sub") == "private"
 
@@ -278,13 +283,15 @@ def test_workflow_post_without_transition_is_400(api, sandbox):
     assert r.status == 400, r
 
 
-@pytest.mark.plone_bug("a guard failure is 400 WorkflowException with an untranslated "
-                       "\"No workflow provides the '${action_id}' action.\" instead of 401/403")
-@pytest.mark.known_divergence(NICK, reason="Nick answers 401 (arguably right)", kind="plone-bug")
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="a guard failure is 400 WorkflowException with an untranslated "
+                                     "\"No workflow provides the '${action_id}' action.\" instead of 401/403")
 def test_workflow_editor_cannot_publish(api, sandbox):
+    """publish needs Review portal content, which Editor lacks: a permission refusal (401/403),
+    not a malformed request."""
     path = api.doc(sandbox, "d")
     r = api.post(f"{path}/@workflow/publish", as_="local_editor")
-    assert r.status == 400, r
+    assert r.status in DENIED, r
     assert api.state(path) == "private"
 
 
@@ -297,12 +304,13 @@ def test_workflow_transition_without_view_is_denied(api, sandbox, persona):
 
 
 @pytest.mark.parametrize("persona", ["anonymous", "member"])
-@pytest.mark.plone_bug("guard failure is a 400 WorkflowException, even for anonymous")
-@pytest.mark.known_divergence(NICK, reason="guard failure gives 401 instead of 400", kind="plone-bug")
+@pytest.mark.known_divergence(PLONE, kind="plone-bug", ref="F1",
+                              reason="guard failure is a 400 WorkflowException, even for anonymous")
 def test_workflow_publish_published_by_non_editor(api, sandbox, persona):
     """Published items are viewable, so the service runs and the guard
-    decides. retract would be a same-state no-op here, so use reject."""
-    expected = 400
+    decides. retract would be a same-state no-op here, so use reject.
+    The guard refuses for lack of permission: 401/403, not 400."""
+    expected = 401
     api.publish(sandbox)
     path = api.doc(sandbox, "d")
     api.publish(path)

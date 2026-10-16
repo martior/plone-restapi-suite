@@ -264,15 +264,22 @@ def test_sharing_post_without_inherit_key(api, sandbox):
 
 @pytest.mark.parametrize("persona,expected", [("anonymous", 403), ("member", 403), ("local_editor", 204)],
                          ids=["anonymous", "member", "local_editor"])
-@pytest.mark.plone_bug("@sharing POST without permission answers 403 with the JSON body null, even for "
-                       "anonymous (every other service gives 401 + an error object)")
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1", ids=["anonymous", "member"],
+                              reason="@sharing POST without permission answers 403 with the JSON body null, even "
+                                     "for anonymous (every other service gives 401 + an error object)")
 def test_sharing_post_permission(api, sandbox, persona, expected):
-    """Plone: Change local roles is granted to Editor (CMFPlone rolemap 'Sharing page: Delegate roles')."""
+    """Plone: Change local roles is granted to Editor (CMFPlone rolemap 'Sharing page: Delegate roles').
+    A refusal is an error object like on every other service, and anonymous gets 401 (RFC 9110
+    15.5.2: authentication would help)."""
     u = api.create_user()
     api.publish(sandbox)
     r = api.post(f"{sandbox}/@sharing", as_=persona,
                  json={"entries": [{"id": u.id, "type": "user", "roles": {"Reader": True}}], "inherit": True})
     assert same_outcome(expected, r.status), r
+    if expected in DENIED:
+        assert isinstance(r.json, dict) and r.json, r
+    if persona == "anonymous":
+        assert r.status == 401, r
 
 
 def test_sharing_editor_cannot_delegate_manager_role(api, sandbox):

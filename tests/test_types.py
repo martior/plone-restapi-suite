@@ -102,12 +102,15 @@ def test_types_addable_matches_actual_add(api, sandbox):
     assert not bad, bad
 
 
-@pytest.mark.plone_bug("a Collection posted with only its required title fails: 'Object is of wrong type' for field query")
-def test_types_collection_minimal_add_fails(api, sandbox):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="a Collection posted with only its required title fails: 'Object is of wrong "
+                                     "type' for field query (missing_value '' on a List field)")
+def test_types_collection_minimal_add(api, sandbox):
+    """usage/content.md: a POST with the required fields creates the item (201); query is optional."""
     if "Collection" not in by_id(api.get(f"{sandbox}/@types", compare=False).json):
         pytest.skip("target has no Collection type")
     r = api.post(sandbox, json={"@type": "Collection", "title": "c"})
-    assert r.status == 400, r
+    assert r.status == 201, r
 
 
 @pytest.mark.known_divergence("nick", kind="deliberate", reason="Nick's Page is folderish (Volto-style)")
@@ -179,9 +182,9 @@ def test_type_schema_anonymous_is_401(api, sandbox):
     assert api.get(f"{sandbox}/@types/{{type:document}}", as_="anonymous").status == 401
 
 
-@pytest.mark.plone_bug("check_security lets anonymous through for the context's own type (issue 2054), "
-                       "but the dexterity-types traversal then raises Unauthorized: still 401")
 def test_type_schema_anonymous_own_type(api, sandbox):
+    """plone.restapi issue 2054: check_security lets anonymous through for the context's own
+    type, but the traversal to the type then raises Unauthorized, so the outcome is right: 401."""
     api.publish(sandbox)
     assert api.get(f"{sandbox}/@types/{{type:folder}}", as_="anonymous").status == 401
 
@@ -192,34 +195,44 @@ def test_type_schema_authenticated(api, sandbox, persona, expected):
     assert api.get(f"{sandbox}/@types/{{type:document}}", as_=persona).status == expected
 
 
-@pytest.mark.plone_bug("field lookup only searches the FTI model schema: behaviour fields such as "
-                       "description come back as 200 {} instead of their JSON schema")
-@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick returns the JSON schema of the field")
+def _is_field_schema(j) -> bool:
+    return isinstance(j, dict) and bool(j.get("type")) and bool(j.get("title"))
+
+
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="field lookup only searches the FTI model schema: behaviour fields such as "
+                                     "description come back as 200 {}")
 def test_type_field_lookup_behaviour_field(api):
-    """GET @types/<type>/<field> on the site root (docs/source/endpoints/types.md)."""
+    """types.md:136-143: GET @types/<type>/<field> returns the field's properties (JSON schema).
+    Behaviour fields are immutable (types.md:50), but still readable."""
     r = api.get("@types/{type:document}/description")
-    assert r.status == 200, r
-    assert r.json == {}, r
+    assert r.status == 200 and _is_field_schema(r.json), r
 
 
-@pytest.mark.plone_bug("@types/<type>/title is 403 'not publishable': the field name collides with the title attribute")
-@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick returns the JSON schema of the title field")
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="@types/<type>/title is 403 'not publishable': the field name collides with "
+                                     "the title attribute")
 def test_type_field_lookup_title(api):
-    assert api.get("@types/{type:document}/title").status == 403
+    """types.md:136-143, for the field called title."""
+    r = api.get("@types/{type:document}/title")
+    assert r.status == 200 and _is_field_schema(r.json), r
 
 
-@pytest.mark.plone_bug("fieldset lookup @types/<type>/default is 200 {} for behaviour-only types")
-@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick returns the fieldset")
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="fieldset lookup @types/<type>/default is 200 {} for behaviour-only types")
 def test_type_fieldset_lookup(api):
+    """types.md:125-132: GET @types/<type>/<fieldset> returns the fieldset with its fields."""
     r = api.get("@types/{type:document}/default")
     assert r.status == 200, r
-    assert r.json == {}, r
+    assert r.json.get("id") == "default" and "title" in r.json.get("fields", []), r
 
 
-@pytest.mark.plone_bug("field/fieldset lookup on a non-root context is a 500")
-@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick returns the JSON schema of the field on any context")
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="field/fieldset lookup on a non-root context is a 500")
 def test_type_field_lookup_on_folder_context(api, sandbox):
-    assert api.get(f"{sandbox}/@types/{{type:document}}/description").status == 500
+    """The lookup works on any context, as GET @types/<type> does."""
+    r = api.get(f"{sandbox}/@types/{{type:document}}/description")
+    assert r.status == 200 and _is_field_schema(r.json), r
 
 
 @by_persona(anonymous=401, member=401, local_editor=401, site_admin=400)

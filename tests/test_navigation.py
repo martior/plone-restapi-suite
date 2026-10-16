@@ -355,13 +355,18 @@ def test_breadcrumbs_unicode_titles(api, sandbox):
     assert items[-1]["title"] == "Ærlig talt – 日本語"
 
 
-@pytest.mark.plone_bug("breadcrumbs of a published item below a private folder show the private folder's "
-                       "title to anonymous (ancestors are not permission-filtered)")
-def test_breadcrumbs_show_private_ancestor_to_anonymous(api, sandbox):
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="breadcrumbs of a published item below a private folder show the private "
+                                     "folder's title to anonymous (ancestors are not permission-filtered)")
+def test_breadcrumbs_hide_private_ancestor_from_anonymous(api, sandbox):
+    """Anonymous may not view the private folder (GET is 401), so its title must not leak
+    through the breadcrumbs of a published item inside it."""
     seed(api, sandbox)
+    assert same_outcome(401, api.get(f"{sandbox}/pf", as_="anonymous").status)
     r = api.get(f"{sandbox}/pf/pubin/@breadcrumbs", as_="anonymous")
     assert r.status == 200, r
-    assert [i["title"] for i in r.json["items"]][-2:] == ["Private folder", "Published inside private"]
+    titles = [i["title"] for i in r.json["items"]]
+    assert "Private folder" not in titles and titles[-1] == "Published inside private", titles
 
 
 def test_breadcrumbs_private_context_requires_view(api, sandbox):
@@ -480,13 +485,18 @@ def test_contextnavigation_default_marks_current_path(api, sandbox):
     assert child_ids(fold) == ["c1", "deep"]
 
 
-@pytest.mark.plone_bug("on a non-folderish context, currentFolderOnly lists only the context itself; its "
-                       "siblings in the parent folder are missing (on the folder they are all listed)")
+@pytest.mark.known_divergence("plone", kind="plone-bug", ref="F1",
+                              reason="on a non-folderish context below the first level, currentFolderOnly lists "
+                                     "only the context itself; its siblings are missing (QueryBuilder passes "
+                                     "depth=999 together with navtree=1)")
 @pytest.mark.known_divergence(NICK, kind="deliberate", reason="Nick's Page is folderish, so its own (empty) folder is listed")
 def test_contextnavigation_on_document(api, sandbox):
+    """contextnavigation.md:41 and the field help: currentFolderOnly shows "the current folder and its
+    children". For a document the current folder is its parent (getRootPath picks the parent),
+    so the document's siblings are listed, as on the folder itself."""
     seed(api, sandbox)
     j = cnav(api, f"{sandbox}/fold/c1", currentFolderOnly="true").json
-    assert ordered_children(j) == ["c1"]
+    assert ordered_children(j) == ["c1", "deep"]
     c1 = find_node(j["items"], api.t.base, f"{sandbox}/fold/c1")
     assert c1["is_current"] is True
 
