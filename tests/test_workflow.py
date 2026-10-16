@@ -219,8 +219,6 @@ def test_workflow_include_children_tolerates_child_already_in_target_state(api, 
                               reason="include_children is not atomic: the WorkflowException of a child becomes a "
                                      "400 response, but the transaction is committed, so the parent stays "
                                      "transitioned")
-@pytest.mark.known_divergence(NICK, reason="no per-child validation: the published child is submitted, 200",
-                              ref="A2#4")
 def test_workflow_include_children_invalid_child_is_400_and_atomic(api, sandbox):
     """submit is invalid for a published child. An error response means nothing happened
     (RFC 9110 15.5: the request was not applied), so the parent stays private too."""

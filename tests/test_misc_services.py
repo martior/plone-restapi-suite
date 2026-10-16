@@ -128,7 +128,6 @@ def test_controlpanel_shape(api):
     assert sorted(fields) == sorted(j["schema"]["properties"])
 
 
-@pytest.mark.known_divergence(NICK, reason="Nick's security panel only has use_email_as_login", kind="deliberate")
 def test_controlpanel_security_fields(api):
     data = api.get("@controlpanels/security").json["data"]
     assert {"enable_self_reg", "enable_user_pwd_choice", "use_email_as_login"} <= set(data), data
