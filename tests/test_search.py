@@ -740,10 +740,6 @@ VIS = {
 
 
 @pytest.mark.parametrize("persona", list(VIS))
-@pytest.mark.known_divergence(NICK, reason="search ACL omits local roles other than Reader (local Editor)",
-                              ref="A2#2", ids=["local_editor"])
-@pytest.mark.known_divergence(NICK, reason="the local Reader is granted after the content exists and "
-                              "@sharing does not reindex the ACL", ref="A2#1", ids=["subreader", "groupreader"])
 def test_search_permission_filtered(api, sandbox, persona):
     """Each persona finds exactly what it may View: workflow state, local roles on a
     subfolder (user and group), and blocked inheritance all apply."""
@@ -761,10 +757,6 @@ def test_search_permission_filtered(api, sandbox, persona):
 
 
 @pytest.mark.parametrize("persona", list(VIS))
-@pytest.mark.known_divergence(NICK, reason="search ACL omits local roles other than Reader (local Editor)",
-                              ref="A2#2", ids=["local_editor"])
-@pytest.mark.known_divergence(NICK, reason="the local Reader is granted after the content exists and "
-                              "@sharing does not reindex the ACL", ref="A2#1", ids=["subreader", "groupreader"])
 def test_search_permission_matches_traversal(api, sandbox, persona):
     """Whatever search returns can be opened, and whatever can be opened is found."""
     _perm_tree(api, sandbox)
@@ -883,7 +875,6 @@ def test_search_after_workflow_transition(api, sandbox):
     assert ids(s(api, sandbox, as_="anonymous", portal_type="{type:document}")) == ["beta", "delta"]
 
 
-@pytest.mark.known_divergence(NICK, reason="@sharing POST does not reindex the ACL of descendants", ref="A2#1")
 def test_search_after_sharing_grant_on_folder_reaches_descendants(api, sandbox):
     """Granting Reader on a folder makes its existing private children findable."""
     seed(api, sandbox)
@@ -894,7 +885,6 @@ def test_search_after_sharing_grant_on_folder_reaches_descendants(api, sandbox):
     assert ids(s(api, f"{sandbox}/sub", as_=u)) == ["delta", "gamma", "sub"]
 
 
-@pytest.mark.known_divergence(NICK, reason="@sharing POST does not reindex the ACL (fails open)", ref="A2#1")
 def test_search_after_sharing_revoke_on_folder(api, sandbox):
     seed(api, sandbox)
     u = api.create_user()

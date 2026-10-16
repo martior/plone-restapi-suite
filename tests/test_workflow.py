@@ -248,8 +248,6 @@ def test_workflow_include_children_comment_on_children(api, sandbox):
 
 # invalid / not allowed ----------------------------------------------------
 
-@pytest.mark.known_divergence(NICK, reason="transition not checked against the current state's transitions",
-                              ref="A2#4")
 def test_workflow_submit_on_published_is_400_with_message(api, sandbox):
     """The only cross-state invalid transition of simple_publication_workflow
     (every other one ends in the current state, see the no-op test)."""
@@ -347,7 +345,6 @@ def test_workflow_editor_cannot_edit_pending(api, sandbox):
     assert api.patch(path, as_="local_editor", json={"title": "x"}).status == 204
 
 
-@pytest.mark.known_divergence(NICK, reason="unknown transition id -> TypeError -> 500", ref="A2#4")
 def test_workflow_unknown_transition_on_published_is_400(api, sandbox):
     path = api.doc(sandbox, "d")
     api.publish(path)

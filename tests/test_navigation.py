@@ -218,8 +218,6 @@ def test_navigation_permission_filtered(api, sandbox, persona):
         assert child_ids(pf) == pf_children
 
 
-@pytest.mark.known_divergence(NICK, reason="the local Reader is granted after the content exists and "
-                              "@sharing does not reindex the ACL", ref="A2#1")
 def test_navigation_local_reader_on_subfolder(api, sandbox):
     seed(api, sandbox)
     u = api.create_user()
@@ -240,7 +238,6 @@ def test_navigation_on_private_context_requires_view(api, sandbox):
     assert same_outcome(401, r.status), r
 
 
-@pytest.mark.known_divergence(NICK, reason="@sharing POST does not reindex the catalog ACL", ref="A2#1")
 def test_navigation_after_sharing_grant(api, sandbox):
     seed(api, sandbox)
     u = api.create_user()

@@ -463,8 +463,6 @@ def test_qs_permission_filtered(api, sandbox, persona):
     assert ids(qs(api, sandbox, [HERE], as_=persona)) == VIS[persona]
 
 
-@pytest.mark.known_divergence(NICK, reason="the local Reader is granted after the content exists and "
-                              "@sharing does not reindex the ACL", ref="A2#1")
 def test_qs_local_reader_on_subfolder(api, sandbox):
     seed(api, sandbox)
     u = api.create_user()
@@ -498,7 +496,6 @@ def test_qs_after_title_change(api, sandbox):
     assert ids(qs(api, sandbox, [HERE, row("SearchableText", "string.contains", "quokka")])) == ["beta"]
 
 
-@pytest.mark.known_divergence(NICK, reason="@sharing POST does not reindex the catalog ACL", ref="A2#1")
 def test_qs_after_sharing_grant(api, sandbox):
     seed(api, sandbox)
     u = api.create_user()
