@@ -306,3 +306,8 @@ The comparator is vendored from plonex `tools/conformance/conformance/compare.py
 GPL version 2, like plone.restapi, whose documentation and HTTP examples the
 tests are based on. Copyrights hold Plone Foundation.
 See [LICENSE.md](LICENSE.md) and [LICENSE.GPL](LICENSE.GPL) for details.
+
+The workflow definitions in
+`targets/nick-profiles/restapi_suite_workflows/workflows/wfmatrix_*/definition.xml`
+are copied unchanged from Products.CMFPlone (`profiles/default/workflows/`),
+GPL-2.0-only, Copyright Plone Foundation.
