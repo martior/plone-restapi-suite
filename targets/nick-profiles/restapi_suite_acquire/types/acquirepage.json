@@ -1,0 +1,17 @@
+{
+  "id": "AcquirePage",
+  "title:i18n": "AcquirePage",
+  "description": "",
+  "global_allow": true,
+  "filter_content_types": false,
+  "allowed_content_types": [],
+  "schema": {
+    "behaviors": [
+      "dublin_core",
+      "short_name",
+      "exclude_from_nav"
+    ],
+    "layouts": []
+  },
+  "workflow": "rs_acquire_workflow"
+}

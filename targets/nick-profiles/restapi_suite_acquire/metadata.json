@@ -1,0 +1,6 @@
+{
+  "id": "restapi-suite:acquire",
+  "title": "restapi-suite acquire fixture",
+  "description": "Types, workflows and a role to observe workflow permission models.",
+  "version": 1000
+}

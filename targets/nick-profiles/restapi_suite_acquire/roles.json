@@ -1,0 +1,12 @@
+{
+  "purge": false,
+  "roles": [
+    {
+      "id": "Auditor",
+      "title:i18n": "Auditor",
+      "permissions": [
+        "View"
+      ]
+    }
+  ]
+}

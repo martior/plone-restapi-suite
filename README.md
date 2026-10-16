@@ -58,6 +58,16 @@ Notes:
   auth requests per 15 minutes) break any test run. Profiles are
   `core` + `examplecontent` (this provides the admin user).
 - The scripts recreate the containers from scratch. Nick's DB volume is dropped too.
+- `PREFIX`, `REMOTE_DIR` and the port variables in `common.sh` can be overridden
+  to run a second, independent Nick (e.g. `PREFIX=plonex-n2 REMOTE_DIR=plonex-n2
+  NICK_PORT=18821 NICK_PG_PORT=18822`); open your own tunnel for its ports.
+- `NICK_EXTRA_PROFILES="nick-profiles/restapi_suite_acquire"` adds fixture
+  profiles (directories relative to `targets/`) to the Nick copy and to its
+  `config.ts`. `tests/test_workflow_acquire.py` needs that fixture (a global
+  `Auditor` role with View, workflows with the `acquire`, `additive` and default
+  permission models, and the types `AcquirePage`, `AdditivePage`, `DefaultPage`);
+  it is Nick-only and skips itself without the fixture, against Plone and in
+  differential mode, because Plone can't be given custom roles and workflows over HTTP.
 
 ## Writing tests
 

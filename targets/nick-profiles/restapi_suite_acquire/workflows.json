@@ -1,0 +1,184 @@
+{
+  "purge": false,
+  "workflows": [
+    {
+      "id": "rs_acquire_workflow",
+      "title:i18n": "RS acquire",
+      "description:i18n": "restapi-suite fixture for the permission model.",
+      "json": {
+        "permission_model": "acquire",
+        "initial_state": "internal",
+        "states": {
+          "internal": {
+            "title:i18n": "Internal",
+            "description:i18n": "Only Editors and Administrators.",
+            "transitions": [
+              "open"
+            ],
+            "permissions": {
+              "Editor": [
+                "View",
+                "Modify"
+              ],
+              "Administrator": [
+                "View",
+                "Modify"
+              ]
+            }
+          },
+          "open": {
+            "title:i18n": "Open",
+            "description:i18n": "Also everyone with View globally.",
+            "transitions": [
+              "close"
+            ],
+            "permissions": {
+              "Editor": [
+                "View",
+                "Modify"
+              ],
+              "Administrator": [
+                "View",
+                "Modify"
+              ]
+            },
+            "acquire": [
+              "View"
+            ]
+          }
+        },
+        "transitions": {
+          "open": {
+            "title:i18n": "Open",
+            "new_state": "open",
+            "permission": "Review"
+          },
+          "close": {
+            "title:i18n": "Close",
+            "new_state": "internal",
+            "permission": "Review"
+          }
+        }
+      }
+    },
+    {
+      "id": "rs_additive_workflow",
+      "title:i18n": "RS additive",
+      "description:i18n": "restapi-suite fixture for the permission model.",
+      "json": {
+        "permission_model": "additive",
+        "initial_state": "internal",
+        "states": {
+          "internal": {
+            "title:i18n": "Internal",
+            "description:i18n": "Only Editors and Administrators.",
+            "transitions": [
+              "open"
+            ],
+            "permissions": {
+              "Editor": [
+                "View",
+                "Modify"
+              ],
+              "Administrator": [
+                "View",
+                "Modify"
+              ]
+            }
+          },
+          "open": {
+            "title:i18n": "Open",
+            "description:i18n": "Also everyone with View globally.",
+            "transitions": [
+              "close"
+            ],
+            "permissions": {
+              "Editor": [
+                "View",
+                "Modify"
+              ],
+              "Administrator": [
+                "View",
+                "Modify"
+              ]
+            },
+            "acquire": [
+              "View"
+            ]
+          }
+        },
+        "transitions": {
+          "open": {
+            "title:i18n": "Open",
+            "new_state": "open",
+            "permission": "Review"
+          },
+          "close": {
+            "title:i18n": "Close",
+            "new_state": "internal",
+            "permission": "Review"
+          }
+        }
+      }
+    },
+    {
+      "id": "rs_default_workflow",
+      "title:i18n": "RS default",
+      "description:i18n": "restapi-suite fixture for the permission model.",
+      "json": {
+        "initial_state": "internal",
+        "states": {
+          "internal": {
+            "title:i18n": "Internal",
+            "description:i18n": "Only Editors and Administrators.",
+            "transitions": [
+              "open"
+            ],
+            "permissions": {
+              "Editor": [
+                "View",
+                "Modify"
+              ],
+              "Administrator": [
+                "View",
+                "Modify"
+              ]
+            }
+          },
+          "open": {
+            "title:i18n": "Open",
+            "description:i18n": "Also everyone with View globally.",
+            "transitions": [
+              "close"
+            ],
+            "permissions": {
+              "Editor": [
+                "View",
+                "Modify"
+              ],
+              "Administrator": [
+                "View",
+                "Modify"
+              ]
+            },
+            "acquire": [
+              "View"
+            ]
+          }
+        },
+        "transitions": {
+          "open": {
+            "title:i18n": "Open",
+            "new_state": "open",
+            "permission": "Review"
+          },
+          "close": {
+            "title:i18n": "Close",
+            "new_state": "internal",
+            "permission": "Review"
+          }
+        }
+      }
+    }
+  ]
+}

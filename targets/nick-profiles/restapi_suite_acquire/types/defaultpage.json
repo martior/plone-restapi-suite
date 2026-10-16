@@ -1,0 +1,17 @@
+{
+  "id": "DefaultPage",
+  "title:i18n": "DefaultPage",
+  "description": "",
+  "global_allow": true,
+  "filter_content_types": false,
+  "allowed_content_types": [],
+  "schema": {
+    "behaviors": [
+      "dublin_core",
+      "short_name",
+      "exclude_from_nav"
+    ],
+    "layouts": []
+  },
+  "workflow": "rs_default_workflow"
+}
