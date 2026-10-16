@@ -130,6 +130,15 @@ resolves them itself, so one request works on Plone and Nick:
   workflows) without restoring it. Such tests must also be safe under
   `pytest -n`. If a test needs a fixed global name (for example a group called
   `Editor`), delete leftovers first (see `role_named_group`).
+- Global state fixtures (`restapi_suite/services.py`, import them into the
+  test module): `global_state` takes an exclusive cross-worker file lock and
+  yields a helper; `global_state.controlpanel("security", {...})` PATCHes only
+  the fields each side's panel schema knows and restores the old values at
+  teardown, `global_state.set(path, body, restore)` / `.defer(fn)` cover the
+  rest. Tests whose assertion depends on the default (for example "anonymous
+  cannot register") take `default_global_state`, a shared lock, so they never
+  run while a `global_state` test has changed something. Example:
+  `tests/test_misc_services.py::test_self_registration_toggle_is_restored`.
 
 ### Markers
 - `@pytest.mark.known_divergence("nick", reason="...", ref="A2#2", kind="bug"|"deliberate"|"plone-bug", ids=["local_editor"])`:

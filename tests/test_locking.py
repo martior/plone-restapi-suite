@@ -1,0 +1,327 @@
+"""@lock: POST (lock, stealable, timeout), GET, PATCH (refresh), DELETE
+(unlock, force), and the effect of a lock on edits and deletes, by the
+lock owner and by other users. Locks live on test content inside the
+sandbox, so teardown removes them with the content."""
+
+from __future__ import annotations
+
+import time
+
+import pytest
+
+from restapi_suite.assertions import DENIED
+
+pytestmark = pytest.mark.area("locking")
+
+NICK = "nick"
+
+
+@pytest.fixture
+def locked_doc(api, sandbox):
+    """A document, two local editors (a, b), and a lock held by a."""
+    path = api.doc(sandbox, "d", title="t0")
+    a, b = api.create_user(), api.create_user()
+    api.share(path, a, ["Editor"])
+    api.share(path, b, ["Editor"])
+    r = api.post(f"{path}/@lock", as_=a)
+    assert r.status == 200, r
+    return path, a, b, r.json["token"]
+
+
+def _lock(api, path, as_="admin"):
+    r = api.get(f"{path}/@lock", as_=as_)
+    assert r.status == 200, r
+    return r.json
+
+
+# ------------------------------------------------------------------ lock / get
+
+def test_lock_get_unlocked(api, sandbox):
+    path = api.doc(sandbox, "d")
+    assert _lock(api, path) == {"locked": False, "stealable": True}
+
+
+def test_lock_post_shape(api, sandbox):
+    path = api.doc(sandbox, "d")
+    r = api.post(f"{path}/@lock")
+    assert r.status == 200, r
+    j = r.json
+    assert {"created", "creator", "creator_name", "creator_url", "locked", "stealable", "time", "timeout",
+            "token"} <= set(j), j
+    assert j["locked"] is True and j["stealable"] is True and j["creator"] == api.t.admin.id, j
+    assert j["timeout"] == 600 and j["token"], j
+
+
+def test_lock_get_returns_same_token(api, locked_doc):
+    path, a, b, token = locked_doc
+    j = _lock(api, path, as_=b)
+    assert j["locked"] is True and j["creator"] == a.id and j["token"] == token, j
+
+
+def test_lock_custom_timeout(api, sandbox):
+    path = api.doc(sandbox, "d")
+    r = api.post(f"{path}/@lock", json={"timeout": 3600})
+    assert r.status == 200 and r.json["timeout"] == 3600, r
+
+
+def test_lock_non_stealable_reported(api, sandbox):
+    path = api.doc(sandbox, "d")
+    a = api.create_user()
+    api.share(path, a, ["Editor"])
+    assert api.post(f"{path}/@lock", as_=a, json={"stealable": False}).status == 200
+    assert _lock(api, path, as_="admin")["stealable"] is False
+
+
+def test_lock_relock_by_owner_keeps_token(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.post(f"{path}/@lock", as_=a)
+    assert r.status == 200 and r.json["token"] == token, r
+
+
+@pytest.mark.known_divergence(NICK, reason="locking an item locked by someone else is 401 'Already locked' "
+                              "(Plone silently returns the existing lock)", kind="plone-bug")
+@pytest.mark.plone_bug("POST @lock on an item locked by another user answers 200 with the other user's "
+                       "lock instead of an error")
+def test_lock_by_other_user_returns_existing_lock(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.post(f"{path}/@lock", as_=b)
+    assert r.status == 200 and r.json["creator"] == a.id and r.json["token"] == token, r
+
+
+@pytest.mark.parametrize("persona", ["anonymous", "member"])
+def test_lock_requires_modify(api, sandbox, persona):
+    api.publish(sandbox)
+    path = api.doc(sandbox, "d")
+    api.publish(path)
+    assert api.get(path, as_=persona).status == 200
+    assert api.post(f"{path}/@lock", as_=persona).status in DENIED
+    assert _lock(api, path)["locked"] is False
+
+
+def test_lock_get_needs_view_only(api, sandbox):
+    api.publish(sandbox)
+    path = api.doc(sandbox, "d")
+    api.publish(path)
+    api.post(f"{path}/@lock")
+    j = _lock(api, path, as_="anonymous")
+    assert j["locked"] is True
+
+
+def test_lock_get_private_as_anonymous_denied(api, sandbox):
+    path = api.doc(sandbox, "d")
+    assert api.get(f"{path}/@lock", as_="anonymous").status in DENIED
+
+
+def test_lock_expires_after_timeout(api, sandbox):
+    path = api.doc(sandbox, "d")
+    a, b = api.create_user(), api.create_user()
+    api.share(path, a, ["Editor"])
+    api.share(path, b, ["Editor"])
+    assert api.post(f"{path}/@lock", as_=a, json={"timeout": 1}).status == 200
+    time.sleep(2.5)
+    assert _lock(api, path)["locked"] is False
+    assert api.patch(path, as_=b, json={"title": "after expiry"}).status == 204
+
+
+# ------------------------------------------------------------------ edits under a lock
+
+def test_lock_other_user_cannot_edit_without_token(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.patch(path, as_=b, json={"title": "b"})
+    assert r.status in (403, 401), r
+    assert api.get(path).json["title"] == "t0"
+
+
+def test_lock_edit_without_token_is_403_resource_locked(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.patch(path, as_=b, json={"title": "b"})
+    assert r.status == 403 and r.json["error"]["message"] == "Resource is locked.", r
+
+
+def test_lock_owner_needs_token_too(api, locked_doc):
+    """The token, not the user, unlocks editing: the owner without it is refused."""
+    path, a, b, token = locked_doc
+    assert api.patch(path, as_=a, json={"title": "a"}).status in (401, 403)
+    assert api.get(path).json["title"] == "t0"
+
+
+def test_lock_admin_cannot_edit_without_token(api, locked_doc):
+    path, a, b, token = locked_doc
+    assert api.patch(path, json={"title": "admin"}).status in (401, 403)
+
+
+def test_lock_owner_edits_with_token(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.patch(path, as_=a, json={"title": "a"}, headers={"Lock-Token": token})
+    assert r.status == 204, r
+    assert api.get(path).json["title"] == "a"
+
+
+def test_lock_wrong_token_is_refused(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.patch(path, as_=a, json={"title": "a"}, headers={"Lock-Token": "not-the-token"})
+    assert r.status in (401, 403), r
+
+
+@pytest.mark.plone_bug("the lock token alone authorizes the edit: another editor who learns the token "
+                       "(GET @lock shows it to anyone with View) can edit the locked item")
+def test_lock_token_from_get_lets_other_editor_edit(api, locked_doc):
+    path, a, b, token = locked_doc
+    leaked = _lock(api, path, as_=b)["token"]
+    assert api.patch(path, as_=b, json={"title": "b"}, headers={"Lock-Token": leaked}).status == 204
+
+
+def test_lock_survives_edit_with_token(api, locked_doc):
+    path, a, b, token = locked_doc
+    api.patch(path, as_=a, json={"title": "a"}, headers={"Lock-Token": token})
+    j = _lock(api, path)
+    assert j["locked"] is True and j["token"] == token, j
+
+
+def test_lock_token_does_not_grant_permission(api, locked_doc):
+    """A member without Modify cannot edit just by presenting the token."""
+    path, a, b, token = locked_doc
+    api.publish(path)
+    u = api.create_user()
+    r = api.patch(path, as_=u, json={"title": "u"}, headers={"Lock-Token": token})
+    assert r.status in DENIED, r
+
+
+def test_lock_blocks_delete_by_other_user(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.delete(path, as_=b)
+    assert r.status == 423, r
+    assert api.get(path).status == 200
+
+
+@pytest.mark.plone_bug("workflow transitions ignore the lock")
+def test_lock_does_not_block_workflow_transition(api, locked_doc):
+    path, a, b, token = locked_doc
+    assert api.post(f"{path}/@workflow/publish").status == 200
+    assert _lock(api, path)["locked"] is True
+
+
+# ------------------------------------------------------------------ refresh
+
+def test_lock_refresh_by_owner_keeps_token(api, locked_doc):
+    path, a, b, token = locked_doc
+    before = _lock(api, path)
+    time.sleep(1.1)
+    r = api.patch(f"{path}/@lock", as_=a)
+    assert r.status == 200 and r.json["locked"] is True, r
+    assert r.json["token"] == token, "refresh must not invalidate the client's token"
+    assert api.patch(path, as_=a, json={"title": "after refresh"}, headers={"Lock-Token": token}).status == 204
+    assert before["creator"] == r.json["creator"] == a.id
+
+
+def test_lock_refresh_keeps_timeout(api, sandbox):
+    path = api.doc(sandbox, "d")
+    api.post(f"{path}/@lock", json={"timeout": 3600})
+    r = api.patch(f"{path}/@lock")
+    assert r.status == 200 and r.json["timeout"] == 3600, r
+
+
+@pytest.mark.plone_bug("PATCH @lock by another editor refreshes someone else's lock (200, lock unchanged) "
+                       "instead of refusing")
+@pytest.mark.known_divergence(NICK, reason="Nick refuses with 401 'Already locked' (arguably right)",
+                              kind="plone-bug")
+def test_lock_refresh_by_other_user(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.patch(f"{path}/@lock", as_=b)
+    assert r.status == 200 and r.json["creator"] == a.id and r.json["token"] == token, r
+
+
+def test_lock_refresh_unlocked_item(api, sandbox):
+    """Refreshing an unlocked item does not create a lock."""
+    path = api.doc(sandbox, "d")
+    r = api.patch(f"{path}/@lock")
+    assert r.status == 200, r
+    assert r.json["locked"] is False and _lock(api, path)["locked"] is False
+
+
+# ------------------------------------------------------------------ unlock
+
+def test_unlock_by_owner(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.delete(f"{path}/@lock", as_=a)
+    assert r.status == 200 and r.json == {"locked": False, "stealable": True}, r
+    assert _lock(api, path)["locked"] is False
+    assert api.patch(path, as_=b, json={"title": "b"}).status == 204
+
+
+def test_unlock_by_other_user_without_force_keeps_lock(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.delete(f"{path}/@lock", as_=b)
+    assert r.status in (200, 401, 403), r
+    assert _lock(api, path)["locked"] is True
+
+
+def test_unlock_force_steals_stealable_lock(api, locked_doc):
+    path, a, b, token = locked_doc
+    r = api.delete(f"{path}/@lock", as_=b, json={"force": True})
+    assert r.status == 200 and r.json["locked"] is False, r
+    assert _lock(api, path)["locked"] is False
+    assert api.patch(path, as_=b, json={"title": "b"}).status == 204
+
+
+def test_unlock_force_cannot_steal_non_stealable_lock(api, sandbox):
+    path = api.doc(sandbox, "d")
+    a, b = api.create_user(), api.create_user()
+    api.share(path, a, ["Editor"])
+    api.share(path, b, ["Editor"])
+    api.post(f"{path}/@lock", as_=a, json={"stealable": False})
+    api.delete(f"{path}/@lock", as_=b, json={"force": True})
+    assert _lock(api, path)["locked"] is True
+
+
+def test_unlock_force_by_admin_cannot_remove_non_stealable_lock(api, sandbox):
+    path = api.doc(sandbox, "d")
+    a = api.create_user()
+    api.share(path, a, ["Editor"])
+    api.post(f"{path}/@lock", as_=a, json={"stealable": False})
+    r = api.delete(f"{path}/@lock", json={"force": True})
+    assert r.status in (200, 401, 403), r
+    assert _lock(api, path)["locked"] is True
+
+
+@pytest.mark.plone_bug("a refused force-unlock still removes the non-stealable marker "
+                       "(services/locking/delete.py: noLongerProvides runs after the failed unlock), "
+                       "so a second force-unlock steals the lock")
+@pytest.mark.known_divergence(NICK, reason="the non-stealable lock holds (Nick never unlocks on DELETE)",
+                              kind="plone-bug")
+def test_unlock_failed_force_makes_lock_stealable(api, sandbox):
+    path = api.doc(sandbox, "d")
+    a, b = api.create_user(), api.create_user()
+    api.share(path, a, ["Editor"])
+    api.share(path, b, ["Editor"])
+    api.post(f"{path}/@lock", as_=a, json={"stealable": False})
+    api.delete(f"{path}/@lock", as_=b, json={"force": True})
+    assert _lock(api, path)["locked"] is True
+    api.delete(f"{path}/@lock", as_=b, json={"force": True})
+    assert _lock(api, path)["locked"] is False
+
+
+@pytest.mark.parametrize("persona", ["anonymous", "member"])
+def test_unlock_requires_modify(api, sandbox, persona):
+    api.publish(sandbox)
+    path = api.doc(sandbox, "d")
+    api.publish(path)
+    api.post(f"{path}/@lock")
+    assert api.delete(f"{path}/@lock", as_=persona, json={"force": True}).status in DENIED
+    assert _lock(api, path)["locked"] is True
+
+
+def test_unlock_unlocked_item_is_noop(api, sandbox):
+    path = api.doc(sandbox, "d")
+    r = api.delete(f"{path}/@lock")
+    assert r.status == 200 and r.json == {"locked": False, "stealable": True}, r
+
+
+def test_lock_unlock_relock_gives_new_token(api, sandbox):
+    path = api.doc(sandbox, "d")
+    t1 = api.post(f"{path}/@lock").json["token"]
+    api.delete(f"{path}/@lock")
+    t2 = api.post(f"{path}/@lock").json["token"]
+    assert t1 != t2
+    assert api.patch(path, json={"title": "x"}, headers={"Lock-Token": t1}).status in (401, 403)
+    assert api.patch(path, json={"title": "x"}, headers={"Lock-Token": t2}).status == 204
