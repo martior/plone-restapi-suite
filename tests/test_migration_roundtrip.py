@@ -508,7 +508,9 @@ def plone_workflow_history(side, path):
 
 
 def nick_workflow_history(side, path):
-    return [(e.get("action"), e["actor"]["id"], e["review_state"], e.get("comments") or "", norm_time(e["time"]),
+    """Nick's @history shows the creation entry as "Create", like Plone's @history."""
+    return [(None if e.get("action") == "Create" else e.get("action"), e["actor"]["id"], e["review_state"],
+             e.get("comments") or "", norm_time(e["time"]),
              None if localized(path) else e.get("transition_title"))
             for e in side.docs[path]["history"] if e["type"] == "workflow"]
 

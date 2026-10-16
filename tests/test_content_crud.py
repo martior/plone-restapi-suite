@@ -244,6 +244,7 @@ def test_post_invalid_json_error_is_json(api, sandbox):
 
 
 @pytest.mark.plone_bug("a JSON array body on POST is a 500 (AttributeError: list has no .get)")
+@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick answers 400 (no @type)")
 def test_post_json_array_body_is_500(api, sandbox):
     r = api.post(sandbox, json=[{"@type": "{type:document}", "title": "x"}])
     assert r.status == 500, r
@@ -349,6 +350,7 @@ def test_post_unusual_explicit_id_is_kept(api, sandbox, odd_id):
 
 
 @pytest.mark.plone_bug("ids starting with '@' are accepted and the child then shadows the @-service of the same name")
+@pytest.mark.known_divergence("nick", kind="plone-bug", reason="the @-service wins over a child with the same id")
 def test_post_child_named_like_service_shadows_it(api, sandbox):
     r = api.post(sandbox, json={"@type": "{type:document}", "id": "@search", "title": "Shadow"})
     assert r.status == 201, r
@@ -360,7 +362,7 @@ def test_post_uid_as_admin_is_honoured(api, sandbox):
     want = uid(32).ljust(32, "0")
     r = api.post(sandbox, json={"@type": "{type:document}", "id": "withuid", "title": "x", "UID": want})
     assert r.status == 201, r
-    assert r.json["UID"] == want
+    assert r.json["UID"].replace("-", "") == want  # Nick formats uuids with dashes
 
 
 def test_post_uid_requires_manage_portal(api, sandbox):
@@ -376,6 +378,7 @@ def test_post_initial_review_state_is_private(api, sandbox):
     assert r.json["review_state"] == "private"
 
 
+@pytest.mark.known_divergence("nick", kind="deliberate", reason="Nick's Page has blocks, no rich text field")
 def test_post_with_text_field(api, sandbox):
     text = {"data": "<p>Hello <b>world</b></p>", "content-type": "text/html", "encoding": "utf-8"}
     r = api.post(sandbox, json={"@type": "{type:document}", "id": "t", "title": "x", "text": text})

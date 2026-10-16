@@ -161,7 +161,6 @@ def test_group_global_role(api, sandbox):
     assert api.get(f"{sandbox}/d", as_=u).status == 200
 
 
-@pytest.mark.known_divergence("nick", reason="Owner gets neither View nor Modify from the private state", ref="A2#8")
 def test_local_contributor_owns_what_it_creates(api, sandbox):
     u = api.create_user()
     api.share(sandbox, u, ["Contributor"])

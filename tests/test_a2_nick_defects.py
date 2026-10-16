@@ -206,7 +206,6 @@ def test_a2_6_workflow_history_cannot_be_forged_on_create(api, sandbox):
     assert "mallory-forged" not in h.text and "forged entry" not in h.text, h
 
 
-@pytest.mark.known_divergence(NICK, reason="transition comments are dropped (comments: '')", ref="A2#6")
 def test_a2_6_transition_comment_is_recorded(api, sandbox):
     api.doc(sandbox, "d")
     r = api.post(f"{sandbox}/d/@workflow/publish", json={"comment": "because-s4a"})
@@ -217,8 +216,6 @@ def test_a2_6_transition_comment_is_recorded(api, sandbox):
     assert entry["comments"] == "because-s4a", entry
 
 
-@pytest.mark.known_divergence(NICK, reason="@workflow GET returns history: [] (models/workflow/workflow.ts:42)",
-                              ref="A2 4d")
 def test_a2_6_workflow_get_lists_history(api, sandbox):
     api.doc(sandbox, "d")
     api.publish(f"{sandbox}/d")
@@ -252,7 +249,6 @@ def test_a2_7_deleting_user_keeps_versions_they_authored(api, sandbox):
 
 # ---------------------------------------------------------------- A2#8
 
-@pytest.mark.known_divergence(NICK, reason="private state grants Owner no View", ref="A2#8")
 def test_a2_8_owner_can_view_and_edit_own_private_item(api, sandbox):
     u = api.create_user()
     api.share(sandbox, u, ["Contributor"])

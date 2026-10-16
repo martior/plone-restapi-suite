@@ -151,6 +151,7 @@ def test_history_content_reports_current_version(api, sandbox):
 
 
 @pytest.mark.plone_bug("a version that does not exist is a 500 (CMFEditions ArchivistRetrieveError), not 404")
+@pytest.mark.known_divergence(NICK, kind="plone-bug", reason="Nick answers 404")
 def test_history_get_unknown_version_is_500(api, sandbox):
     path = _doc_with_edits(api, sandbox, n=1)
     assert api.get(f"{path}/@history/99").status == 500

@@ -194,6 +194,7 @@ def test_type_schema_authenticated(api, sandbox, persona, expected):
 
 @pytest.mark.plone_bug("field lookup only searches the FTI model schema: behaviour fields such as "
                        "description come back as 200 {} instead of their JSON schema")
+@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick returns the JSON schema of the field")
 def test_type_field_lookup_behaviour_field(api):
     """GET @types/<type>/<field> on the site root (docs/source/endpoints/types.md)."""
     r = api.get("@types/{type:document}/description")
@@ -202,11 +203,13 @@ def test_type_field_lookup_behaviour_field(api):
 
 
 @pytest.mark.plone_bug("@types/<type>/title is 403 'not publishable': the field name collides with the title attribute")
+@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick returns the JSON schema of the title field")
 def test_type_field_lookup_title(api):
     assert api.get("@types/{type:document}/title").status == 403
 
 
 @pytest.mark.plone_bug("fieldset lookup @types/<type>/default is 200 {} for behaviour-only types")
+@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick returns the fieldset")
 def test_type_fieldset_lookup(api):
     r = api.get("@types/{type:document}/default")
     assert r.status == 200, r
@@ -214,6 +217,7 @@ def test_type_fieldset_lookup(api):
 
 
 @pytest.mark.plone_bug("field/fieldset lookup on a non-root context is a 500")
+@pytest.mark.known_divergence("nick", kind="plone-bug", reason="Nick returns the JSON schema of the field on any context")
 def test_type_field_lookup_on_folder_context(api, sandbox):
     assert api.get(f"{sandbox}/@types/{{type:document}}/description").status == 500
 

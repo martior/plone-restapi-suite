@@ -14,7 +14,6 @@ from restapi_suite.services import transition_ids
 pytestmark = pytest.mark.area("workflow")
 
 NICK = "nick"
-HISTORY_EMPTY = dict(reason="@workflow GET returns history: [] (models/workflow/workflow.ts)", ref="A2 4d")
 
 
 def _local(api, sandbox, role):
@@ -39,7 +38,6 @@ def test_workflow_get_shape(api, sandbox):
     assert {t["title"] for t in j["transitions"]} == {"Publish", "Submit for publication"}
 
 
-@pytest.mark.known_divergence(NICK, **HISTORY_EMPTY)
 def test_workflow_get_initial_history_entry(api, sandbox):
     path = api.doc(sandbox, "d")
     h = api.get(f"{path}/@workflow").json["history"]
@@ -50,7 +48,6 @@ def test_workflow_get_initial_history_entry(api, sandbox):
     assert set(e) == {"action", "actor", "comments", "review_state", "time", "title"}, e
 
 
-@pytest.mark.known_divergence(NICK, **HISTORY_EMPTY)
 def test_workflow_history_grows_in_order(api, sandbox):
     path = api.doc(sandbox, "d")
     for t in ("submit", "reject", "publish", "retract"):
@@ -119,7 +116,6 @@ def test_workflow_post_response_shape(api, sandbox):
                                                                          api.t.admin.id)
 
 
-@pytest.mark.known_divergence(NICK, reason="transition comments are dropped (comments: '')", ref="A2#6")
 def test_workflow_comment_unicode_in_history(api, sandbox):
     path = api.doc(sandbox, "d")
     note = "Godkjent av redaksjonen – ærlig talt ✓"
@@ -166,7 +162,7 @@ def test_workflow_republish_keeps_first_effective(api, sandbox):
 
 @pytest.mark.plone_bug("any transition (even submit) stamps effective with 'now' when it is empty, "
                        "so a never-published item gets a publication date")
-@pytest.mark.known_divergence(NICK, reason="transitions do not set effective", kind="plone-bug")
+@pytest.mark.known_divergence(NICK, reason="Nick sets effective only when an item is published", kind="plone-bug")
 def test_workflow_submit_also_sets_effective(api, sandbox):
     path = api.doc(sandbox, "d")
     api.transition(path, "submit")
@@ -238,7 +234,6 @@ def test_workflow_include_children_applies_dates(api, sandbox):
     assert api.get(f"{f}/sub/d2").json["effective"].startswith("2030-06-01T12:00")
 
 
-@pytest.mark.known_divergence(NICK, reason="transition comments are dropped (comments: '')", ref="A2#6")
 def test_workflow_include_children_comment_on_children(api, sandbox):
     f = _tree(api, sandbox)
     api.post(f"{f}/@workflow/publish", json={"include_children": True, "comment": "batch-publish"})

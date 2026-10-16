@@ -429,7 +429,8 @@ def test_contextnavigation_item_shape(api, sandbox):
     for k in ("@id", "title", "description", "review_state", "href", "is_current", "is_in_path",
               "is_folderish", "normalized_id", "type", "items"):
         assert k in item, sorted(item)
-    assert item["normalized_id"] == "p3" and item["type"] == "document" and item["is_folderish"] is False
+    assert item["normalized_id"] == "p3" and item["type"] == api.type("document").lower()
+    assert item["is_folderish"] is (api.t.target.kind == "nick")  # Nick's Page is folderish
 
 
 def test_contextnavigation_custom_name(api, sandbox):
@@ -481,6 +482,7 @@ def test_contextnavigation_default_marks_current_path(api, sandbox):
 
 @pytest.mark.plone_bug("on a non-folderish context, currentFolderOnly lists only the context itself; its "
                        "siblings in the parent folder are missing (on the folder they are all listed)")
+@pytest.mark.known_divergence(NICK, kind="deliberate", reason="Nick's Page is folderish, so its own (empty) folder is listed")
 def test_contextnavigation_on_document(api, sandbox):
     seed(api, sandbox)
     j = cnav(api, f"{sandbox}/fold/c1", currentFolderOnly="true").json
