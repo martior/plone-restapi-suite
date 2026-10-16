@@ -1,0 +1,6 @@
+{
+  "id": "restapi-suite:workflows",
+  "title": "restapi-suite workflow matrix fixture",
+  "description": "The standard Plone 6.2 workflows from their definition.xml and one type per workflow, for tests/test_workflow_matrix.py.",
+  "version": 1000
+}

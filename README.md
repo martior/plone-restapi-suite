@@ -184,6 +184,33 @@ resolves them itself, so one request works on Plone and Nick:
 - `@pytest.mark.requires("blocks")`: skip unless the target declares the feature in targets.toml.
 - `@pytest.mark.area("types")`: report grouping.
 
+## Workflow matrix (opt-in)
+
+`tests/test_workflow_matrix.py` (marker `workflow_matrix`) checks, for every
+standard Plone 6.2 workflow (simple_publication, one_state, intranet,
+intranet_folder, folder, plone_workflow), every state, transition and role
+(Anonymous, Member, Owner, Reader, Contributor, Editor, Reviewer, Site
+Administrator, Manager), whether GET @workflow offers the transition, against
+the matrix captured from Plone 6.2 in `tests/fixtures/workflow_matrix_plone62.json`
+(792 cells). It is skipped unless `WORKFLOW_MATRIX_URL` is set:
+
+```sh
+WORKFLOW_MATRIX_URL=http://127.0.0.1:18640/plone WORKFLOW_MATRIX_KIND=plone pytest -m workflow_matrix tests/test_workflow_matrix.py
+WORKFLOW_MATRIX_URL=http://127.0.0.1:18641 WORKFLOW_MATRIX_KIND=nick pytest -m workflow_matrix tests/test_workflow_matrix.py
+```
+
+On Plone the test creates a Dexterity type per workflow and assigns the
+workflow with the types control panel form (there is no REST endpoint for
+workflow chains), then removes the types, users and content again. Nick needs
+the fixture profile `targets/nick-profiles/restapi_suite_workflows` (the same
+definition.xml files, loaded by Nick's DCWorkflow loader):
+`NICK_EXTRA_PROFILES="nick-profiles/restapi_suite_acquire nick-profiles/restapi_suite_workflows"`.
+`python tests/test_workflow_matrix.py capture <plone-url> plone` rewrites the
+fixture, `compare <url> <kind>` prints the match rate, and `generate <workflows
+dir> <rolemap.xml>...` adds the comment workflows of plone.app.discussion (not
+installed on the reference site) from DCWorkflow semantics, after checking the
+generator against the captured workflows.
+
 ## Migration round trip (opt-in)
 
 `tests/test_migration_roundtrip.py` (marker `migration`) checks that Nick's

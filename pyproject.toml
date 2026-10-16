@@ -29,4 +29,5 @@ markers = [
   "requires(*features): skip unless the target declares all FEATURES in targets.toml",
   "area(name): service area for the report (default: test module name)",
   "migration: Plone to Nick migration round trip; needs MIGRATION_SOURCE_URL and MIGRATION_TARGET_URL (tests/test_migration_roundtrip.py)",
+  "workflow_matrix: state x transition x role matrix of the standard Plone workflows; needs WORKFLOW_MATRIX_URL (tests/test_workflow_matrix.py)",
 ]
