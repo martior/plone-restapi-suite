@@ -196,10 +196,17 @@ def test_lock_survives_edit_with_token(api, locked_doc):
     assert j["locked"] is True and j["token"] == token, j
 
 
-def test_lock_token_does_not_grant_permission(api, locked_doc):
-    """A member without Modify cannot edit just by presenting the token."""
-    path, a, b, token = locked_doc
+def test_lock_token_does_not_grant_permission(api, sandbox):
+    """A member without Modify cannot edit just by presenting the token. The item is published
+    before it is locked, because a lock blocks transitions by other users
+    (test_lock_blocks_workflow_transition_by_other_user)."""
+    path = api.doc(sandbox, "d", title="t0")
     api.publish(path)
+    a = api.create_user()
+    api.share(path, a, ["Editor"])
+    r = api.post(f"{path}/@lock", as_=a)
+    assert r.status == 200, r
+    token = r.json["token"]
     u = api.create_user()
     r = api.patch(path, as_=u, json={"title": "u"}, headers={"Lock-Token": token})
     assert r.status in DENIED, r
