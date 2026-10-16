@@ -279,7 +279,7 @@ def test_users_admin_sets_password(api):
 
 
 @pytest.mark.plone_bug("PATCH @users bypasses the password policy: a 5 character password is stored")
-@pytest.mark.known_divergence(NICK, reason="Nick ignores the password on PATCH", kind="plone-bug")
+@pytest.mark.known_divergence(NICK, reason="Nick applies the password policy on PATCH (400)", kind="plone-bug")
 def test_users_admin_patch_short_password_accepted(api):
     u = api.create_user()
     assert api.patch(f"@users/{u.id}", json={"password": "short"}).status == 204

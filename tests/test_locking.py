@@ -287,7 +287,7 @@ def test_unlock_force_by_admin_cannot_remove_non_stealable_lock(api, sandbox):
 @pytest.mark.plone_bug("a refused force-unlock still removes the non-stealable marker "
                        "(services/locking/delete.py: noLongerProvides runs after the failed unlock), "
                        "so a second force-unlock steals the lock")
-@pytest.mark.known_divergence(NICK, reason="the non-stealable lock holds (Nick never unlocks on DELETE)",
+@pytest.mark.known_divergence(NICK, reason="Nick keeps the non-stealable lock after a refused force-unlock (arguably right)",
                               kind="plone-bug")
 def test_unlock_failed_force_makes_lock_stealable(api, sandbox):
     path = api.doc(sandbox, "d")
