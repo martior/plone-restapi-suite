@@ -183,8 +183,9 @@ def test_type_schema_anonymous_is_401(api, sandbox):
 
 
 def test_type_schema_anonymous_own_type(api, sandbox):
-    """plone.restapi issue 2054: check_security lets anonymous through for the context's own
-    type, but the traversal to the type then raises Unauthorized, so the outcome is right: 401."""
+    """Anonymous gets no type schema, not even for the context's own type (plone.restapi issue
+    2054). Not a bug in 10.0.4: check_security (services/types/get.py:25-29) refuses every
+    anonymous request with Unauthorized, so the outcome is right: 401."""
     api.publish(sandbox)
     assert api.get(f"{sandbox}/@types/{{type:folder}}", as_="anonymous").status == 401
 
