@@ -22,7 +22,8 @@ import pytest
 
 from restapi_suite.assertions import DENIED
 
-pytestmark = pytest.mark.area("workflow-acquire")
+pytestmark = [pytest.mark.area("workflow-acquire"),
+              pytest.mark.target_only("nick", reason="Plone can't be given custom roles and workflows over HTTP")]
 
 FIXTURE_TYPES = ("AcquirePage", "AdditivePage", "DefaultPage")
 

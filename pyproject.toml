@@ -22,8 +22,10 @@ restapi_suite = ["*.json", "*.toml"]
 testpaths = ["tests"]
 addopts = "-p restapi_suite.plugin -ra"
 markers = [
-  "known_divergence(target, reason, ref=None): expected failure on TARGET (target name or kind); xfail(strict=False)",
-  "plone_bug(reason): the encoded Plone 6.2 behaviour looks like a bug; informational, shown in the report",
+  "known_divergence(target, reason, ref=None, kind='bug', ids=None): expected failure on TARGET (target name or kind glob, e.g. nick or plone); xfail(strict=False)",
+  "compat(reason): asserts Plone behaviour that is arguably wrong but clients depend on ('why; evidence'); reported as its own category",
+  "target_only(*targets, reason=None): test applies only to TARGETS (name or kind globs); skipped elsewhere, reported as its own category",
+  "plone_bug(reason): legacy informational note (no longer used by the suite); shown in the report",
   "requires(*features): skip unless the target declares all FEATURES in targets.toml",
   "area(name): service area for the report (default: test module name)",
   "migration: Plone to Nick migration round trip; needs MIGRATION_SOURCE_URL and MIGRATION_TARGET_URL (tests/test_migration_roundtrip.py)",

@@ -2,8 +2,9 @@
 
     restapi-suite-report [results-dir-or-files ...] [--out report.md] [--details N]
 
-Sections: run summary, per-area pass counts, per-test outcome matrix, failure
-messages, known divergences / Plone-bug notes, differential divergences.
+Sections: run summary, per-category pass counts (correct behaviour / compat /
+target-only), per-area pass counts, failure messages, known divergences and
+compat notes, per-test outcome matrix, differential divergences.
 """
 
 from __future__ import annotations
@@ -55,6 +56,33 @@ def summary(runs) -> list[str]:
                    f"{c['passed']} | {c['failed']} | {c['error']} | {xf} | {c['xpassed']} | {c['skipped']} | "
                    f"{pass_rate(rows)} |")
     out += ["", "pass rate = (passed + xpassed) / (tests - skipped); xfailed counts as not passing.", ""]
+    return out + categories(runs)
+
+
+CATEGORIES = ("correct", "compat", "target-only")
+
+
+def _cat(r) -> str:
+    return r.get("category") or ("compat" if r.get("compat") else "correct")
+
+
+def categories(runs) -> list[str]:
+    """Pass counts split by what a test asserts: correct behaviour (the default),
+    Plone compatibility behaviour clients depend on (@pytest.mark.compat), and
+    tests that only apply to one target (@pytest.mark.target_only)."""
+    out = ["## Per category (passed / tests, excluding skipped)", "",
+           "| run | correct behaviour | compat | target-only | skipped |", "|---|---|---|---|---|"]
+    for name, rows in runs.items():
+        cells = []
+        for cat in CATEGORIES:
+            c = Counter(r["outcome"] for r in rows if _cat(r) == cat)
+            tot = sum(c.values()) - c["skipped"]
+            cells.append(f"{c['passed'] + c['xpassed']} / {tot}" if tot else "-")
+        out.append(f"| {name} | " + " | ".join(cells) + f" | {sum(r['outcome'] == 'skipped' for r in rows)} |")
+    out += ["", "correct behaviour: plone.restapi documentation, then HTTP semantics; Plone 6.2 bugs are "
+            "`known_divergence(\"plone\", kind=\"plone-bug\")` and count as not passing (XPASS once fixed). "
+            "compat: Plone behaviour that is arguably wrong but clients depend on (`@pytest.mark.compat`). "
+            "target-only: tests that apply to one target and skip elsewhere (`@pytest.mark.target_only`).", ""]
     return out
 
 
@@ -103,7 +131,7 @@ def failures(runs) -> list[str]:
 
 
 def notes(runs) -> list[str]:
-    out = ["## Known divergences and Plone-bug notes", ""]
+    out = ["## Known divergences and compat notes", ""]
     seen: dict[tuple, set] = defaultdict(set)
     for n, rows in runs.items():
         for r in rows:
@@ -114,6 +142,11 @@ def notes(runs) -> list[str]:
         out += ["| test | kind | reason | runs |", "|---|---|---|---|"]
         for (t, k, why), where in sorted(seen.items()):
             out.append(f"| `{esc(t.split('::', 1)[1])}` | {k} | {esc(why)} | {', '.join(sorted(where))} |")
+    cp = {(r["nodeid"], r["compat"]) for rows in runs.values() for r in rows if r.get("compat")}
+    if cp:
+        out += ["", "Compat tests: Plone behaviour that is arguably wrong but clients depend on "
+                "(`@pytest.mark.compat`, \"why; evidence\"):", "", "| test | why; evidence |", "|---|---|"]
+        out += [f"| `{esc(t.split('::', 1)[1])}` | {esc(why)} |" for t, why in sorted(cp)]
     pb = {(r["nodeid"], r["plone_bug"]) for rows in runs.values() for r in rows if r.get("plone_bug")}
     if pb:
         out += ["", "Tests that encode Plone 6.2 behaviour which looks like a bug (`@pytest.mark.plone_bug`):", "",

@@ -141,8 +141,17 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(pytest.mark.xfail(reason="; ".join(reasons), strict=False))
             item.user_properties.append(("known_divergence", "; ".join(reasons)))
             item.user_properties.append(("divergence_kind", ",".join(sorted(set(kinds)))))
-        for m in item.iter_markers("plone_bug"):
+        for m in item.iter_markers("plone_bug"):  # legacy, informational
             item.user_properties.append(("plone_bug", m.args[0] if m.args else m.kwargs.get("reason", "")))
+        compat = [m.args[0] if m.args else m.kwargs.get("reason", "") for m in item.iter_markers("compat")]
+        if compat:
+            item.user_properties.append(("compat", "; ".join(compat)))
+        only = [m for m in item.iter_markers("target_only")]
+        for m in only:
+            if not any(_matches_target(spec, tgt) for spec in m.args):
+                why = m.kwargs.get("reason") or f"only runs against {', '.join(m.args)}"
+                item.add_marker(pytest.mark.skip(reason=f"target-only: {why}"))
+        item.user_properties.append(("category", "target-only" if only else "compat" if compat else "correct"))
         for m in item.iter_markers("requires"):
             missing = [f for f in m.args if f not in tgt.features]
             if missing:
