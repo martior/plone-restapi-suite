@@ -300,3 +300,9 @@ counts as not passing on Plone), **compat** (`@pytest.mark.compat`) and
 5. Add any new helper to `Api` and document it here.
 
 The comparator is vendored from plonex `tools/conformance/conformance/compare.py` (task S1), unchanged except for its header.
+
+## License
+
+GPL version 2, like plone.restapi, whose documentation and HTTP examples the
+tests are based on. Copyrights hold Plone Foundation.
+See [LICENSE.md](LICENSE.md) and [LICENSE.GPL](LICENSE.GPL) for details.
